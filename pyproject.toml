@@ -1,0 +1,23 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "commerce-resolve-agent"
+version = "0.1.0"
+description = "A policy-aware e-commerce after-sales agent built with LangGraph."
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "MIT" }
+dependencies = []
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8,<10",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/commerce_resolve"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
