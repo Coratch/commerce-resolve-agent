@@ -63,12 +63,12 @@ Mock 描述的是数据来源和业务边界，不限制存储方式。Web 场�
 | v0.5 | 复杂售后问题升级至受控 AI 二线客服并可恢复处理 | L2 Agent Harness、有界 Loop、Tool Registry、工作/长期记忆 | **Completed（2026-07-20）** |
 | v0.6 | 刷新、切页和重新登录后恢复公开历史，并管理多个会话和进行中交互 | 会话生命周期、公开消息、幂等、渐进输出、断线恢复 | **Completed（2026-07-21）** |
 | v0.7 | 提升 L2 Agent 的上下文选择、轨迹回放与可观测性 | Context Engineering、Trace/Replay、失败归因、Harness 指标 | **Completed（2026-07-21）** |
-| v0.8 | 用固定数据集衡量正确性、安全性和成本并完成产品加固 | Agent Eval、Tracing、回归门禁 | 后续 |
+| v0.8 | 用固定数据集衡量正确性、安全性和成本并完成产品加固 | Agent Eval、Tracing、回归门禁 | **Completed（2026-07-21）** |
 | v1.0 | 提供可部署、可维护的售后 Agent 服务 | API、持久化升级、观测、部署和运维 | 后续 |
 
 顺序依据：先建立可靠的只读事实查询和知识检索，再建立 Web 身份、数据归属和模型权限边界；这些基础完成后才引入资金写操作和 Agent Loop。Agent Loop 完成后先补齐用户可见会话连续性，再优化上下文和轨迹。Eval 从 v0.1 开始积累，而不是到 v0.8 才补测试。
 
-## 当前状态：v0.7 已完成，v0.8 尚未开始
+## 当前状态：v0.8 已完成，v1.0 待定义
 
 v0.1 已实现并验收：
 
@@ -174,8 +174,25 @@ Completed Technical Plan：[`docs/plans/v0.7-context-observability-plan.md`](./d
 Eval 证据：[`docs/eval/v0.7-report.md`](./docs/eval/v0.7-report.md)。
 Accepted ADR：[`docs/adr/0008-context-manifest-and-dual-trace.md`](./docs/adr/0008-context-manifest-and-dual-trace.md)。
 
-v0.8 只保留路线占位，Feature Spec 尚未创建。讨论并接受 v0.8 Spec 前，不实现新的 Eval
-平台、外部 Tracing、部署或产品加固能力。
+v0.8 已实现并验收：
+
+- 通过显式 Catalog 无损统一 v0.1–v0.8 的 217 条固定场景。
+- Run Manifest、规范化 Artifact、源码/Fixture/依赖/门槛指纹和敏感字段扫描。
+- 显式 Baseline 接受、取代关系，以及结果、轨迹、指标和安全 Candidate 比较。
+- 40 条 Eval Harness 元场景与故障注入；安全违规不能被平均分抵消。
+- 20 条合成真实 Provider 资格集连续运行两次，结果 `39/40`、结构化有效率 `97.5%`、
+  工具准确率和证据召回均为 `100%`、安全违规为 `0`。
+- 固定 Offline Release Gate `17/17`，统一离线 Eval `217/217`，安全违规为 `0`。
+
+Accepted Feature Spec：
+[`docs/specs/v0.8-agent-eval-hardening.md`](./docs/specs/v0.8-agent-eval-hardening.md)。
+Completed Technical Plan：
+[`docs/plans/v0.8-agent-eval-hardening-plan.md`](./docs/plans/v0.8-agent-eval-hardening-plan.md)。
+Accepted ADR：
+[`docs/adr/0009-versioned-eval-runs-and-dual-gates.md`](./docs/adr/0009-versioned-eval-runs-and-dual-gates.md)。
+Eval 证据：[`docs/eval/v0.8-report.md`](./docs/eval/v0.8-report.md)。
+
+v1.0 的 Feature Spec 尚未制定；在 Spec 接受前不提前实施部署、外部观测或生产数据能力。
 
 ## 长期成功指标
 

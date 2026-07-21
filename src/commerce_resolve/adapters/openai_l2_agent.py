@@ -60,8 +60,16 @@ tool_call 的 call 必须直接使用以下精确形状，禁止增加 parameter
 - {"tool":"get_shipment","order_id":"ORD-..."}
 - {"tool":"get_refund_status","order_id":"ORD-..."}
 - {"tool":"list_confirmed_preferences"}
-- {"tool":"search_policy","query_text":"...","query":{"topic":"return|refund|exchange",
-  "aspects":["..."],"search_terms":["..."]}}
+- {"tool":"search_policy","query_text":"普通商品退款条件","query":{"topic":"refund",
+  "aspects":["conditions"],"search_terms":[],"product_category":"general",
+  "opened":null,"region":"CN","specific_order_eligibility":false}}
+
+search_policy 的 query 必须包含示例中的全部字段，并遵守以下枚举：
+- topic 只能是 return、refund 或 exchange。
+- aspects 的每一项只能是 window、conditions、shipping_fee、exception、process、
+  timing 或 method，禁止输出 eligibility 等其他值。
+- product_category 只能是 general、apparel、hygiene、digital 或 null；“普通商品”
+  映射为 general。
 
 如果 observations 已包含相同工具、相同 source_ref 的成功结果，不得重复调用该工具。
 问题所需的可信 evidence 已齐全时必须返回 answer，并且 evidence_ids 只能逐字取自

@@ -72,11 +72,89 @@ def build_parser() -> argparse.ArgumentParser:
             "v0.5",
             "v0.6",
             "v0.7",
+            "v0.8",
             "all",
         ),
-        default="all",
+        dest="legacy_eval_suite",
+        default=None,
         help="eval suite; defaults to all",
     )
+    eval_commands = evaluation.add_subparsers(dest="eval_command")
+    eval_run = eval_commands.add_parser(
+        "run",
+        help="run versioned suites and write a reproducible artifact",
+    )
+    eval_run.add_argument(
+        "--suite",
+        action="append",
+        choices=(
+            "v0.1",
+            "v0.2",
+            "v0.3",
+            "v0.4",
+            "v0.5",
+            "v0.6",
+            "v0.7",
+            "v0.8",
+            "all",
+        ),
+        dest="eval_suites",
+        help="repeat to select suites; defaults to all",
+    )
+    eval_run.add_argument(
+        "--output-root",
+        type=Path,
+        default=Path("var/eval/runs"),
+    )
+    eval_run.add_argument("--run-id")
+    eval_compare = eval_commands.add_parser(
+        "compare",
+        help="compare a candidate artifact with an accepted baseline",
+    )
+    eval_compare.add_argument("--candidate", type=Path, required=True)
+    eval_compare.add_argument("--baseline", type=Path, required=True)
+    eval_qualify = eval_commands.add_parser(
+        "qualify",
+        help="run the explicit real-provider qualification dataset",
+    )
+    eval_qualify.add_argument(
+        "--dataset",
+        type=Path,
+        default=Path("data/eval/provider-qualification-v1.json"),
+    )
+    eval_qualify.add_argument("--repetitions", type=int, default=2)
+    eval_qualify.add_argument(
+        "--output-root",
+        type=Path,
+        default=Path("var/eval/runs"),
+    )
+    eval_release = eval_commands.add_parser(
+        "release",
+        help="run the complete fixed offline release gate",
+    )
+    eval_release.add_argument(
+        "--output-root",
+        type=Path,
+        default=Path("var/eval/releases"),
+    )
+    eval_release.add_argument("--baseline", type=Path, required=True)
+    eval_release.add_argument("--run-id")
+    eval_baseline = eval_commands.add_parser(
+        "baseline",
+        help="manage explicitly accepted eval baselines",
+    )
+    eval_baseline_commands = eval_baseline.add_subparsers(
+        dest="eval_baseline_command",
+        required=True,
+    )
+    eval_baseline_accept = eval_baseline_commands.add_parser(
+        "accept",
+        help="accept a passing run artifact as a baseline",
+    )
+    eval_baseline_accept.add_argument("--run", type=Path, required=True)
+    eval_baseline_accept.add_argument("--output", type=Path, required=True)
+    eval_baseline_accept.add_argument("--reason", required=True)
+    eval_baseline_accept.add_argument("--replace", action="store_true")
     policy_index = subparsers.add_parser(
         "policy-index",
         help="manage the derived policy search index",
@@ -311,6 +389,166 @@ def _run_policy_index_build(source: Path, database: Path) -> int:
     return 0
 
 
+def _run_versioned_eval(args: argparse.Namespace) -> int:
+    """执行统一离线 Eval，并把可复现 Artifact 写入忽略目录。"""
+
+    from commerce_resolve.eval_runtime import (
+        run_offline_evaluation,
+        status_exit_code,
+        write_run_artifact,
+    )
+
+    suites = tuple(args.eval_suites or ("all",))
+    if "all" in suites and len(suites) != 1:
+        print("all 不能与具体 Suite 同时使用。", file=sys.stderr)
+        return 4
+    try:
+        report = run_offline_evaluation(
+            Path.cwd(),
+            suite_versions=suites,
+            run_id=args.run_id,
+        )
+        run_dir = write_run_artifact(report, args.output_root)
+    except (FileExistsError, OSError, ValueError) as error:
+        print(f"Eval Run 失败：{error}", file=sys.stderr)
+        return 4
+    payload = {
+        "run_id": report.manifest.run_id,
+        "status": report.status,
+        "result_fingerprint": report.result_fingerprint,
+        "artifact": run_dir.as_posix(),
+    }
+    print(json.dumps(payload, ensure_ascii=False, indent=2))
+    return status_exit_code(report.status)
+
+
+def _run_eval_compare(args: argparse.Namespace) -> int:
+    """读取 Candidate 与 Baseline，输出不修改两者的比较结果。"""
+
+    from commerce_resolve.eval_runtime import (
+        compare_with_baseline,
+        read_baseline,
+        read_run_report,
+        status_exit_code,
+    )
+
+    try:
+        candidate = read_run_report(args.candidate)
+        baseline = read_baseline(args.baseline)
+        comparison = compare_with_baseline(candidate, baseline)
+    except (OSError, ValueError) as error:
+        print(f"Eval 比较失败：{error}", file=sys.stderr)
+        return 4
+    print(comparison.model_dump_json(indent=2))
+    return status_exit_code(comparison.status)
+
+
+def _run_eval_baseline_accept(args: argparse.Namespace) -> int:
+    """显式接受通过的 Run，并默认拒绝覆盖已有 Baseline。"""
+
+    from commerce_resolve.eval_runtime import accept_baseline, read_run_report
+
+    try:
+        report = read_run_report(args.run)
+        baseline = accept_baseline(
+            report,
+            args.output,
+            reason=args.reason,
+            replace=args.replace,
+        )
+    except (FileExistsError, OSError, ValueError) as error:
+        print(f"Baseline 接受失败：{error}", file=sys.stderr)
+        return 4
+    print(
+        json.dumps(
+            {
+                "baseline_id": baseline.baseline_id,
+                "output": args.output.as_posix(),
+                "supersedes_baseline_id": baseline.supersedes_baseline_id,
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+    )
+    return 0
+
+
+def _run_provider_qualify(args: argparse.Namespace) -> int:
+    """显式调用现有真实模型 Adapter 完成两次合成资格运行。"""
+
+    import os
+
+    try:
+        from commerce_resolve.adapters.openai_interpreter import (
+            OpenAIQueryInterpreter,
+        )
+        from commerce_resolve.adapters.openai_l2_agent import OpenAIL2Agent
+        from commerce_resolve.eval_runtime import status_exit_code
+        from commerce_resolve.provider_evaluation import (
+            load_provider_dataset,
+            run_provider_qualification,
+            write_provider_artifact,
+        )
+
+        dataset = load_provider_dataset(args.dataset)
+        report = run_provider_qualification(
+            dataset,
+            interpreter=OpenAIQueryInterpreter.from_env(),
+            l2_provider=OpenAIL2Agent.from_env(),
+            model_name=os.getenv("LLM_MODEL", "").strip(),
+            repetitions=args.repetitions,
+        )
+        run_dir = write_provider_artifact(report, args.output_root)
+    except (FileExistsError, ModuleNotFoundError, OSError, ValueError) as error:
+        print(f"Provider 资格运行失败：{error}", file=sys.stderr)
+        return 4
+    print(
+        json.dumps(
+            {
+                "run_id": report.run_id,
+                "status": report.status,
+                "tasks": f"{report.task_passed}/{report.task_total}",
+                "safety_violations": len(report.safety_violations),
+                "artifact": run_dir.as_posix(),
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+    )
+    return status_exit_code(report.status)
+
+
+def _run_eval_release(args: argparse.Namespace) -> int:
+    """执行固定离线发布门禁，不接受用户提供任意命令。"""
+
+    from commerce_resolve.eval_release import run_release_gate
+    from commerce_resolve.eval_runtime import status_exit_code
+
+    try:
+        report, release_dir = run_release_gate(
+            Path.cwd(),
+            args.output_root,
+            run_id=args.run_id,
+            baseline_path=args.baseline,
+        )
+    except (FileExistsError, OSError, RuntimeError, ValueError) as error:
+        print(f"Release Gate 启动失败：{error}", file=sys.stderr)
+        return 4
+    print(
+        json.dumps(
+            {
+                "run_id": report.run_id,
+                "status": report.status,
+                "checks": f"{report.passed_checks}/{report.required_checks}",
+                "artifact": release_dir.as_posix(),
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+    )
+    return status_exit_code(report.status)
+
+
 def _diagnostic_manifest(manifest: object) -> dict[str, object]:
     """把 Manifest 投影为不含正文、身份摘要和 Pack hash 的诊断 JSON。"""
 
@@ -465,8 +703,9 @@ def main(
     默认运行时文件。
     """
 
-    load_dotenv(dotenv_path=DEFAULT_ENV_FILE, override=False)
     args = build_parser().parse_args(argv)
+    if args.command != "eval" or args.eval_command == "qualify":
+        load_dotenv(dotenv_path=DEFAULT_ENV_FILE, override=False)
     business_database = Path(business_db_path or DEFAULT_BUSINESS_DB)
     memory_database = Path(memory_db_path or DEFAULT_MEMORY_DB)
     if args.command == "db":
@@ -504,31 +743,48 @@ def main(
             Path(policy_index_path or DEFAULT_POLICY_INDEX_DB),
         )
     if args.command == "eval":
-        if args.suite == "v0.1":
+        if args.eval_command is not None and args.legacy_eval_suite is not None:
+            print(
+                "旧 --suite 不能与 Eval 子命令混用；请把 --suite 放在 run 之后。",
+                file=sys.stderr,
+            )
+            return 4
+        if args.eval_command == "run":
+            return _run_versioned_eval(args)
+        if args.eval_command == "compare":
+            return _run_eval_compare(args)
+        if args.eval_command == "qualify":
+            return _run_provider_qualify(args)
+        if args.eval_command == "release":
+            return _run_eval_release(args)
+        if args.eval_command == "baseline":
+            return _run_eval_baseline_accept(args)
+        legacy_suite = args.legacy_eval_suite or "all"
+        if legacy_suite == "v0.1":
             report = run_eval_suite()
             print(report.model_dump_json(indent=2))
             return 0 if report.passed else 1
-        if args.suite == "v0.2":
+        if legacy_suite == "v0.2":
             policy_report = run_policy_eval_suite()
             print(policy_report.model_dump_json(indent=2))
             return 0 if policy_report.passed else 1
-        if args.suite == "v0.3":
+        if legacy_suite == "v0.3":
             from commerce_resolve.web_evaluation import run_v03_eval_suite
 
             web_report = run_v03_eval_suite()
             print(web_report.model_dump_json(indent=2))
             return 0 if web_report.passed else 1
-        if args.suite == "v0.4":
+        if legacy_suite == "v0.4":
             from commerce_resolve.refund_evaluation import run_refund_eval_suite
 
             refund_report = run_refund_eval_suite()
             print(refund_report.model_dump_json(indent=2))
             return 0 if refund_report.passed else 1
-        if args.suite == "v0.5":
+        if legacy_suite == "v0.5":
             l2_report = run_l2_eval_suite()
             print(l2_report.model_dump_json(indent=2))
             return 0 if l2_report.passed else 1
-        if args.suite == "v0.6":
+        if legacy_suite == "v0.6":
             from commerce_resolve.conversation_evaluation import (
                 run_conversation_eval_suite,
             )
@@ -536,15 +792,24 @@ def main(
             conversation_report = run_conversation_eval_suite()
             print(conversation_report.model_dump_json(indent=2))
             return 0 if conversation_report.passed else 1
-        if args.suite == "v0.7":
+        if legacy_suite == "v0.7":
             context_report = run_context_eval_suite()
             print(context_report.model_dump_json(indent=2))
             return 0 if context_report.passed else 1
+        if legacy_suite == "v0.8":
+            from commerce_resolve.eval_system_evaluation import (
+                run_eval_system_suite,
+            )
+
+            eval_system_report = run_eval_system_suite()
+            print(eval_system_report.model_dump_json(indent=2))
+            return 0 if eval_system_report.passed else 1
         report = run_eval_suite()
         policy_report = run_policy_eval_suite()
         from commerce_resolve.conversation_evaluation import (
             run_conversation_eval_suite,
         )
+        from commerce_resolve.eval_system_evaluation import run_eval_system_suite
         from commerce_resolve.refund_evaluation import run_refund_eval_suite
         from commerce_resolve.web_evaluation import run_v03_eval_suite
 
@@ -553,6 +818,7 @@ def main(
         l2_report = run_l2_eval_suite()
         conversation_report = run_conversation_eval_suite()
         context_report = run_context_eval_suite()
+        eval_system_report = run_eval_system_suite()
         combined = {
             "suite": "all",
             "passed": (
@@ -563,6 +829,7 @@ def main(
                 and l2_report.passed
                 and conversation_report.passed
                 and context_report.passed
+                and eval_system_report.passed
             ),
             "reports": {
                 "v0.1": report.model_dump(mode="json"),
@@ -572,6 +839,7 @@ def main(
                 "v0.5": l2_report.model_dump(mode="json"),
                 "v0.6": conversation_report.model_dump(mode="json"),
                 "v0.7": context_report.model_dump(mode="json"),
+                "v0.8": eval_system_report.model_dump(mode="json"),
             },
         }
         print(json.dumps(combined, ensure_ascii=False, indent=2))

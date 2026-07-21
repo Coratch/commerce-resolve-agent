@@ -18,7 +18,10 @@ from commerce_resolve.adapters.openai_interpreter import (
     OPENAI_TIMEOUT_SECONDS,
     OpenAIQueryInterpreter,
 )
-from commerce_resolve.gateways import InterpreterUnavailableError
+from commerce_resolve.gateways import (
+    InterpreterOutputInvalidError,
+    InterpreterUnavailableError,
+)
 from commerce_resolve.models import Interpretation, InterpretationContext, PolicyQuery
 
 
@@ -63,6 +66,10 @@ def test_openai_interpreter_returns_validated_structured_output() -> None:
         max_tokens=MAX_OUTPUT_TOKENS,
         stream=False,
     )
+    assert "未收到货、物流丢失或配送异常时使用 delivery_issue" in (
+        INTERPRETER_INSTRUCTIONS
+    )
+    assert "“普通商品”映射为\n  general" in INTERPRETER_INSTRUCTIONS
 
 
 def test_openai_interpreter_handles_explicit_l2_command_without_provider() -> None:
@@ -211,7 +218,7 @@ def test_openai_interpreter_rejects_json_that_violates_schema() -> None:
     )
     interpreter = OpenAIQueryInterpreter(client=client, model="test-model")
 
-    with pytest.raises(InterpreterUnavailableError, match="暂时不可用"):
+    with pytest.raises(InterpreterOutputInvalidError, match="暂时不可用"):
         interpreter.interpret("查询订单 ORD-001")
 
 

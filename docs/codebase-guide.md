@@ -7,7 +7,9 @@
 
 ```text
 ecommerce-agent/
-├── data/policies/                   # 受版本控制的政策事实来源
+├── data/
+│   ├── policies/                    # 受版本控制的政策事实来源
+│   └── eval/                        # Provider 合成数据与显式接受的脱敏 Baseline
 ├── frontend/                        # React + TypeScript SPA
 │   ├── e2e/                         # Playwright 真实浏览器场景
 │   └── src/
@@ -31,6 +33,13 @@ ecommerce-agent/
 │   ├── l2_evaluation.py             # v0.5 固定 L2 Harness Eval
 │   ├── conversation_evaluation.py   # v0.6 固定会话生命周期 Eval
 │   ├── context_evaluation.py        # v0.7 固定 Context/Trace/Freshness Eval
+│   ├── eval_models.py               # v0.8 通用 Eval、Artifact、Baseline 与比较 Schema
+│   ├── eval_catalog.py              # 显式 Suite Registry 与 v0.1-v0.8 Adapter
+│   ├── eval_runtime.py              # Run 指纹、Artifact、Baseline 接受与 Candidate 比较
+│   ├── eval_system_evaluation.py    # v0.8 的 40 条 Harness 自检场景
+│   ├── provider_evaluation.py       # 20 条真实 Provider 双次资格评测
+│   ├── eval_release.py              # 固定 ReleaseCheck、受控子进程和发布报告
+│   ├── release_checks.py            # 迁移、OpenAPI 类型与敏感产物内部检查
 │   ├── conversation_models.py       # 公开会话、消息、Run 与事件领域模型
 │   ├── conversation_projection.py   # 内部 Graph 结果到公开消息的白名单投影
 │   ├── conversation_runtime.py      # 后台 Run、Graph streaming 与公开事件协调
@@ -99,6 +108,15 @@ Gateway 契约
 - `l2_observability.py` 将 Context、模型、工具、Policy、预算和验证失败映射为稳定归因，
   并只向 Web 或本地 CLI 暴露白名单字段。
 - `checkpointing.py` 只保存 LangGraph State；业务事实和政策正文不进入 Checkpoint。
+- `eval_catalog.py` 通过显式 Adapter 保留旧 Suite 输出，同时为 217 条场景生成稳定全局 ID；
+  不扫描插件或动态导入用户模块。
+- `eval_runtime.py` 把源码、Fixture、Catalog 和门槛摘要写入忽略目录中的 Run Artifact；只有
+  明确通过且安全违规为零的 Run 才能通过独立命令成为版本控制 Baseline。
+- `provider_evaluation.py` 复用既有真实 Interpreter/L2 Adapter，但只使用 20 条合成数据；
+  资格报告不保存完整 Prompt、自然语言回复、Key 或 Base URL，并区分 Provider 不可用与
+  结构化输出无效。
+- `eval_release.py` 只执行代码中固定的测试、迁移、OpenAPI、前端、E2E 和敏感产物检查，
+  使用 `shell=False`、环境白名单、超时进程组终止和脱敏本地日志。
 
 ## Web 关键文件
 
@@ -267,14 +285,26 @@ Trace 状态、Case 内单调序号、Manifest 关联、Token/耗时及失败归
   Trace 分页去重、跨账号隔离，以及刷新后的真实浏览器回放。
 - `conversation_evaluation.py` / `test_conversation_evaluation.py` / `test_cli.py`：32 个固定
   v0.6 会话、SSE、恢复、身份和数据最小化场景。
+- `eval_system_evaluation.py` / `test_eval_system_evaluation.py`：40 个 Catalog、Artifact、
+  Baseline、比较、故障归因、安全与发布门禁元场景，以及强制失败注入。
+- `test_eval_catalog.py`、`test_eval_runtime.py`、`test_eval_cli.py`：统一 217 场景 Catalog、
+  可复现 Run、显式 Baseline、Candidate 比较与兼容 CLI。
+- `provider_evaluation.py` / `test_provider_evaluation.py`：20 条合成 Provider Fixture 的两次
+  资格运行、Fake Provider 确定性验证和脱敏 Artifact。
+- `eval_release.py` / `release_checks.py` / `test_eval_release.py`：固定工程命令、失败传播、
+  环境白名单、迁移、OpenAPI 类型和敏感产物检查。
 - `frontend/src/**/*.test.tsx`：API/组件行为。
 - `frontend/e2e/*.spec.ts`：生产 SPA + FastAPI 与无端口构建产物的浏览器闭环。
 
 ## 当前边界
 
-v0.6 只实现本地单实例、单 Uvicorn worker、进程内 BackgroundTask、步骤级 SSE、单个有界
+v0.8 只实现本地单实例、单 Uvicorn worker、进程内 BackgroundTask、步骤级 SSE、单个有界
 AI 二线 Agent 和固定 R0 工具。不实现真实人工客服、真实支付、部分退款、逆向物流、
 多级审批、多 Agent、Provider Token 流、Redis/外部 Worker、多实例部署或真实电商接入。
 进程退出会将未完成 Run 标记为 `interrupted`，由用户显式安全重试，不承诺自动续跑。
+
+v0.8 Eval Artifact 默认位于 `var/eval/` 并被 Git 忽略；版本库只保存合成数据、明确接受的
+脱敏 Baseline 和稳定报告。离线门禁与 Provider 资格是独立通道，Provider 波动不能降低
+确定性安全门槛。
 
 新增、删除、移动代码目录或改变文件职责时，必须同步更新本文档。

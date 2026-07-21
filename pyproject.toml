@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "commerce-resolve-agent"
-version = "0.7.0"
+version = "0.8.0"
 description = "A policy-aware e-commerce after-sales agent built with LangGraph."
 readme = "README.md"
 requires-python = ">=3.12"

@@ -25,11 +25,17 @@ Mock 数据可以持久化到本地 `var/business.sqlite`；“Mock”表示它�
 - `v0.5 LLM 二线客服 Agent Harness`：Completed，固定 Eval `30/30`。
 - `v0.6 会话生命周期、历史恢复与可恢复交互`：Completed，固定 Eval `32/32`。
 - `v0.7 L2 上下文工程、轨迹回放与可观测性`：Completed，固定 Eval `36/36`。
+- `v0.8 Agent Eval 与产品加固`：Completed，统一离线 Eval `217/217`，安全违规 `0`。
 
 v0.7 的核心边界：Context Pack 只在调用内存在；数据库中的 Manifest 仅保存来源引用、版本、
 选择原因、计数和哈希，不保存完整 Prompt、候选正文或隐藏推理。Replay 只读取业务库，不会
 重新运行 Graph、模型或工具。订单、物流、退款与政策在模型调用前按真实来源重新验证；必要
 事实缺失、过期、冲突或超预算时安全停止且不调用 Provider。
+
+v0.8 将既有 177 条业务场景与 40 条 Eval Harness 元场景统一为版本化 Catalog；离线 Run
+生成可复现、脱敏 Artifact，Baseline 只能经独立命令显式接受。Offline Release Gate 与真实
+Provider Qualification 保持独立：前者负责确定性安全和工程发布，后者只使用合成数据验证当前
+模型与 Prompt 的结构化质量。
 
 ## 安装
 
@@ -192,7 +198,29 @@ python -m commerce_resolve eval --suite v0.4
 python -m commerce_resolve eval --suite v0.5
 python -m commerce_resolve eval --suite v0.6
 python -m commerce_resolve eval --suite v0.7
+python -m commerce_resolve eval --suite v0.8
 python -m commerce_resolve eval --suite all
+
+# 生成可复现、脱敏且默认不提交的统一 Run Artifact
+python -m commerce_resolve eval run
+
+# 显式接受通过的 Run；普通 eval run 不会自动移动 Baseline
+python -m commerce_resolve eval baseline accept \
+  --run var/eval/runs/<run_id> \
+  --output data/eval/baselines/offline-v0.8.json \
+  --reason "说明接受该 Candidate 的原因"
+
+# 比较 Candidate 与已接受 Baseline
+python -m commerce_resolve eval compare \
+  --candidate var/eval/runs/<candidate_run_id> \
+  --baseline data/eval/baselines/offline-v0.8.json
+
+# 只有该显式命令读取 .env 并调用真实 OpenAI-compatible Provider
+python -m commerce_resolve eval qualify --repetitions 2
+
+# 执行固定离线发布检查；不接受任意 Shell 参数
+python -m commerce_resolve eval release \
+  --baseline data/eval/baselines/offline-v0.8.json
 
 cd frontend
 npm run typecheck
@@ -230,6 +258,10 @@ npm run api:generate
 - [v0.7 Feature Spec](./docs/specs/v0.7-context-observability.md)
 - [v0.7 Technical Plan](./docs/plans/v0.7-context-observability-plan.md)
 - [v0.7 Eval](./docs/eval/v0.7-report.md)
+- [v0.8 Feature Spec](./docs/specs/v0.8-agent-eval-hardening.md)
+- [v0.8 Technical Plan](./docs/plans/v0.8-agent-eval-hardening-plan.md)
+- [v0.8 Eval](./docs/eval/v0.8-report.md)
+- [ADR-0009 版本化 Eval Run、受控 Baseline 与双通道门禁](./docs/adr/0009-versioned-eval-runs-and-dual-gates.md)
 - [ADR-0008 元数据型 Context Manifest 与双层 Trace](./docs/adr/0008-context-manifest-and-dual-trace.md)
 - [ADR-0007 公开会话事件与可重放 SSE](./docs/adr/0007-public-conversation-events-and-sse.md)
 - [ADR-0004 同源 Web 架构](./docs/adr/0004-same-origin-web-architecture.md)
@@ -252,4 +284,8 @@ npm run api:generate
   Trace 会降级为 `unavailable`。
 - 当前 Context 选择使用确定性字符串、订单锚点与中文 bigram；未引入 Embedding、Rerank、
   自动摘要或外部 Trace 平台。Token 在 Provider 不返回 Usage 时为显式标记的保守估算。
+- v0.8 Runtime Artifact 和脱敏日志只保存在 Git 忽略的 `var/eval/`；已接受 Baseline 只保存
+  规范化结构化结果，不保存完整 Prompt、Provider 回复、API Key、Base URL 或用户绝对路径。
+- Provider 资格结果会受模型服务波动影响，不能替代离线安全门禁；发布必须先通过确定性
+  Offline Gate，真实 Provider 资格作为独立证据。
 - 会话暂不支持全文搜索、编辑单条消息、重新生成、分支、分享、导出或附件。

@@ -36,6 +36,10 @@ class InterpreterUnavailableError(RuntimeError):
     """表示意图解释器暂时无法返回可信的结构化结果。"""
 
 
+class InterpreterOutputInvalidError(InterpreterUnavailableError):
+    """表示 Provider 已响应，但内容无法通过意图 Schema 校验。"""
+
+
 class PolicyRepositoryUnavailableError(RuntimeError):
     """表示政策索引缺失、过期或暂时无法读取。"""
 

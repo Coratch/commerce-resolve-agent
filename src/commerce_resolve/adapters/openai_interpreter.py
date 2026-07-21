@@ -9,6 +9,7 @@ from pydantic import ValidationError
 
 from commerce_resolve.gateways import (
     INTERPRETER_UNAVAILABLE_MESSAGE,
+    InterpreterOutputInvalidError,
     InterpreterUnavailableError,
 )
 from commerce_resolve.models import Interpretation, InterpretationContext
@@ -47,6 +48,12 @@ INTERPRETER_INSTRUCTIONS = """\
   只能提取通用政策问题。
 - 不判断具体订单资格，不生成政策、订单或物流事实。
 
+RefundReason 映射：
+- 用户明确表示不想要、买错或不再需要时使用 no_longer_needed。
+- 用户明确表示破损、瑕疵或质量问题时使用 quality_issue。
+- 用户明确表示未收到货、物流丢失或配送异常时使用 delivery_issue。
+- 只有不属于以上三类且用户提供了明确原因时使用 other。
+
 订单号格式示例为 ORD-001；存在时转为大写，不存在时返回 null。
 previous_policy_query 只用于理解上一轮政策问题的条件补充或追问。
 pending_refund_request=true 只表示上一轮正在等待订单号或退款原因。
@@ -57,7 +64,8 @@ PolicyQuery 约束：
 - aspects：window | conditions | shipping_fee | exception | process | timing |
   method，至少一项。
 - search_terms：最多 8 个、每项不超过 40 字；只放用户原文中的检索短语，可为空。
-- product_category：general | apparel | hygiene | digital | null。
+- product_category：general | apparel | hygiene | digital | null；“普通商品”映射为
+  general。
 - opened：true | false | null，数字商品“已激活”视为 true。
 - region：CN | overseas，默认 CN。
 - specific_order_eligibility：问题是否要求判断具体订单资格。
@@ -189,4 +197,6 @@ class OpenAIQueryInterpreter:
         try:
             return Interpretation.model_validate_json(content)
         except ValidationError:
-            raise InterpreterUnavailableError(INTERPRETER_UNAVAILABLE_MESSAGE) from None
+            raise InterpreterOutputInvalidError(
+                INTERPRETER_UNAVAILABLE_MESSAGE
+            ) from None

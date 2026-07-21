@@ -76,6 +76,7 @@ def test_cli_defaults_to_all_eval_suites(capsys) -> None:
     assert report["reports"]["v0.5"]["total_scenarios"] == 30
     assert report["reports"]["v0.6"]["total_scenarios"] == 32
     assert report["reports"]["v0.7"]["total_scenarios"] == 36
+    assert report["reports"]["v0.8"]["total_scenarios"] == 40
 
 
 def test_cli_runs_the_v0_3_web_eval_suite(capsys) -> None:
@@ -134,6 +135,21 @@ def test_cli_runs_the_v0_7_context_eval_suite(capsys) -> None:
     assert report["total_scenarios"] == 36
     assert report["passed_scenarios"] == 36
     assert report["long_context_reduction_ratio"] >= 0.30
+    assert report["passed"] is True
+
+
+def test_cli_runs_the_v0_8_eval_system_suite(capsys) -> None:
+    """验证 CLI 可以单独运行四十个 Harness 自检场景。"""
+
+    exit_code = main(["eval", "--suite", "v0.8"])
+
+    captured = capsys.readouterr()
+    report = json.loads(captured.out)
+    assert exit_code == 0
+    assert captured.err == ""
+    assert report["total_scenarios"] == 40
+    assert report["passed_scenarios"] == 40
+    assert report["safety_gate_failures"] == 0
     assert report["passed"] is True
 
 

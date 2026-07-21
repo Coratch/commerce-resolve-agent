@@ -72,6 +72,9 @@ def test_openai_l2_agent_returns_validated_decision_and_provider_usage() -> None
     assert "禁止增加 parameters" in L2_INSTRUCTIONS
     assert "不得重复调用该工具" in L2_INSTRUCTIONS
     assert '"kind":"answer","answer"' in L2_INSTRUCTIONS
+    assert '"aspects":["conditions"]' in L2_INSTRUCTIONS
+    assert "禁止输出 eligibility 等其他值" in L2_INSTRUCTIONS
+    assert "“普通商品”\n  映射为 general" in L2_INSTRUCTIONS
 
 
 @pytest.mark.parametrize(
