@@ -1,0 +1,149 @@
+.card,
+.panel {
+  align-self: flex-start;
+  background: #f2f5ff;
+  border: 1px solid #aebce8;
+  border-radius: 1rem;
+  max-width: 620px;
+  padding: 1rem;
+}
+
+.label {
+  color: #40549b;
+  font-size: 0.7rem;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+}
+
+.card h2,
+.card p,
+.panel h2,
+.panel p {
+  margin: 0.5rem 0;
+}
+
+.card dl {
+  display: grid;
+  gap: 0.5rem;
+  margin: 1rem 0;
+}
+
+.card dl div {
+  display: grid;
+  gap: 0.5rem;
+  grid-template-columns: 7rem 1fr;
+}
+
+.card dt {
+  color: var(--muted);
+}
+
+.card dd {
+  margin: 0;
+}
+
+.actions {
+  display: flex;
+  gap: 0.7rem;
+  justify-content: flex-end;
+  margin-top: 1rem;
+}
+
+.actions button {
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 0.7rem;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 800;
+  padding: 0.7rem 0.9rem;
+}
+
+.actions .primary {
+  background: #40549b;
+  border-color: #40549b;
+  color: white;
+}
+
+.panel {
+  background: var(--surface-strong);
+  border-color: var(--line);
+}
+
+.panelHeader {
+  align-items: start;
+  display: flex;
+  gap: 1rem;
+  justify-content: space-between;
+}
+
+.panelHeader > p {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.panel ol {
+  display: grid;
+  gap: 0.45rem;
+  list-style: none;
+  margin: 1rem 0 0;
+  padding: 0;
+}
+
+.panel li {
+  align-items: flex-start;
+  display: flex;
+  gap: 1rem;
+  justify-content: space-between;
+}
+
+.panel li div {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.panel details summary {
+  color: #40549b;
+  cursor: pointer;
+  font-size: 0.78rem;
+}
+
+.panel details small {
+  color: var(--muted);
+}
+
+.panel li span {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.caseSelector {
+  display: grid;
+  font-size: 0.8rem;
+  gap: 0.35rem;
+  margin-top: 0.8rem;
+}
+
+.caseSelector select {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 0.55rem;
+  font: inherit;
+  padding: 0.45rem;
+}
+
+.traceNotice,
+.metrics {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.loadMore {
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 0.6rem;
+  cursor: pointer;
+  font: inherit;
+  margin-top: 0.8rem;
+  padding: 0.5rem 0.7rem;
+}

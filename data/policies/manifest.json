@@ -1,0 +1,290 @@
+{
+  "schema_version": 1,
+  "corpus_version": "2026-07-17-v2",
+  "documents": [
+    {
+      "document_id": "returns-policy",
+      "title": "退货政策",
+      "version": "1.0",
+      "effective_from": "2026-01-01",
+      "effective_to": null,
+      "region": "CN",
+      "status": "published",
+      "path": "returns-v1.md",
+      "sections": [
+        {
+          "section_id": "return-window",
+          "heading": "退货期限",
+          "topic": "return",
+          "aspects": ["window"],
+          "aliases": ["七天无理由", "退货期限", "多少天可以退"],
+          "facts": [
+            {
+              "fact_id": "return.window.general",
+              "claim_text": "普通商品签收后 7 天内可以申请无理由退货。",
+              "rule_key": "return.window_days",
+              "normalized_value": "7",
+              "scope": {},
+              "required_dimensions": []
+            }
+          ]
+        },
+        {
+          "section_id": "return-conditions",
+          "heading": "退货条件",
+          "topic": "return",
+          "aspects": ["conditions"],
+          "aliases": ["拆封后退货", "退货要求", "商品完好"],
+          "facts": [
+            {
+              "fact_id": "return.conditions.opened-general",
+              "claim_text": "普通商品拆封后如仍保持完好且不影响二次销售，可以申请退货。",
+              "rule_key": "return.opened_eligibility",
+              "normalized_value": "allowed_if_resalable",
+              "scope": {
+                "product_categories": ["general", "apparel"],
+                "opened": true
+              },
+              "required_dimensions": ["product_category", "opened"]
+            },
+            {
+              "fact_id": "return.conditions.opened-hygiene",
+              "claim_text": "已拆封的卫生用品不支持无理由退货。",
+              "rule_key": "return.opened_eligibility",
+              "normalized_value": "not_allowed",
+              "scope": {
+                "product_categories": ["hygiene"],
+                "opened": true
+              },
+              "required_dimensions": ["product_category", "opened"]
+            },
+            {
+              "fact_id": "return.conditions.activated-digital",
+              "claim_text": "已激活的数字商品不支持无理由退货。",
+              "rule_key": "return.opened_eligibility",
+              "normalized_value": "not_allowed",
+              "scope": {
+                "product_categories": ["digital"],
+                "opened": true
+              },
+              "required_dimensions": ["product_category", "opened"]
+            },
+            {
+              "fact_id": "return.conditions.unopened",
+              "claim_text": "未拆封且保持完好的商品可以按照对应期限申请退货。",
+              "rule_key": "return.opened_eligibility",
+              "normalized_value": "allowed",
+              "scope": {
+                "product_categories": ["general", "apparel", "hygiene"],
+                "opened": false
+              },
+              "required_dimensions": ["product_category", "opened"]
+            }
+          ]
+        },
+        {
+          "section_id": "return-exceptions",
+          "heading": "退货例外",
+          "topic": "return",
+          "aspects": ["exception"],
+          "aliases": ["哪些不能退", "特殊商品", "退货例外"],
+          "facts": [
+            {
+              "fact_id": "return.exception.categories",
+              "claim_text": "定制商品、已激活数字商品和已拆封卫生用品不适用无理由退货。",
+              "rule_key": "return.excluded_categories",
+              "normalized_value": "custom,digital_activated,hygiene_opened",
+              "scope": {},
+              "required_dimensions": []
+            }
+          ]
+        },
+        {
+          "section_id": "return-shipping-fee",
+          "heading": "退货运费",
+          "topic": "return",
+          "aspects": ["shipping_fee"],
+          "aliases": ["退货邮费", "谁承担运费", "质量问题运费"],
+          "facts": [
+            {
+              "fact_id": "return.shipping-fee.general",
+              "claim_text": "因商品质量问题产生的退货运费由商家承担；无质量问题的无理由退货运费由消费者承担。",
+              "rule_key": "return.shipping_fee",
+              "normalized_value": "merchant_if_quality_issue_else_customer",
+              "scope": {},
+              "required_dimensions": []
+            }
+          ]
+        },
+        {
+          "section_id": "return-process",
+          "heading": "退货流程",
+          "topic": "return",
+          "aspects": ["process"],
+          "aliases": ["怎么退货", "退货步骤", "寄回商品"],
+          "facts": [
+            {
+              "fact_id": "return.process.application",
+              "claim_text": "用户需要先提交退货申请，并在审核通过后按照页面指引寄回商品。",
+              "rule_key": "return.process",
+              "normalized_value": "apply_then_ship_after_approval",
+              "scope": {},
+              "required_dimensions": []
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "document_id": "refunds-policy",
+      "title": "退款政策",
+      "version": "1.0",
+      "effective_from": "2026-01-01",
+      "effective_to": null,
+      "region": "CN",
+      "status": "published",
+      "path": "refunds-v1.md",
+      "sections": [
+        {
+          "section_id": "refund-eligibility",
+          "heading": "直接整单退款资格",
+          "topic": "refund",
+          "aspects": ["conditions"],
+          "aliases": ["发货前退款", "取消订单退款", "直接整单退款"],
+          "facts": [
+            {
+              "fact_id": "refund.eligibility.pre_fulfillment",
+              "claim_text": "订单在发货前或已取消、原支付已结算且没有活动或已完成退款时，可以申请当前可退余额的整单退款。",
+              "rule_key": "refund.pre_fulfillment_eligibility",
+              "normalized_value": "processing_or_cancelled_before_shipment",
+              "scope": {},
+              "required_dimensions": []
+            }
+          ]
+        },
+        {
+          "section_id": "refund-timing",
+          "heading": "退款到账时间",
+          "topic": "refund",
+          "aspects": ["timing"],
+          "aliases": ["多久到账", "退款时间", "工作日"],
+          "facts": [
+            {
+              "fact_id": "refund.timing.standard",
+              "claim_text": "退款申请审核通过后，款项将在 3 至 5 个工作日内原路退回。",
+              "rule_key": "refund.processing_days",
+              "normalized_value": "3-5_business_days",
+              "scope": {},
+              "required_dimensions": []
+            }
+          ]
+        },
+        {
+          "section_id": "refund-method",
+          "heading": "退款方式",
+          "topic": "refund",
+          "aspects": ["method"],
+          "aliases": ["退到哪里", "原路退回", "退款渠道"],
+          "facts": [
+            {
+              "fact_id": "refund.method.original",
+              "claim_text": "退款默认退回原支付方式；原支付方式不可用时需要人工客服确认替代方式。",
+              "rule_key": "refund.method",
+              "normalized_value": "original_payment_method",
+              "scope": {},
+              "required_dimensions": []
+            }
+          ]
+        },
+        {
+          "section_id": "refund-process",
+          "heading": "退款流程",
+          "topic": "refund",
+          "aspects": ["process", "conditions"],
+          "aliases": ["怎么退款", "退款审核", "售后申请"],
+          "facts": [
+            {
+              "fact_id": "refund.process.application",
+              "claim_text": "用户需要先提交售后申请，退款仅在审核通过后进入处理流程。",
+              "rule_key": "refund.process",
+              "normalized_value": "apply_then_review",
+              "scope": {},
+              "required_dimensions": []
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "document_id": "exchanges-policy",
+      "title": "换货政策",
+      "version": "1.0",
+      "effective_from": "2026-01-01",
+      "effective_to": null,
+      "region": "CN",
+      "status": "published",
+      "path": "exchanges-v1.md",
+      "sections": [
+        {
+          "section_id": "exchange-window",
+          "heading": "换货期限",
+          "topic": "exchange",
+          "aspects": ["window"],
+          "aliases": ["多少天换货", "换货期限", "十五天"],
+          "facts": [
+            {
+              "fact_id": "exchange.window.general",
+              "claim_text": "普通商品签收后 15 天内可以申请换货。",
+              "rule_key": "exchange.window_days",
+              "normalized_value": "15",
+              "scope": {},
+              "required_dimensions": []
+            }
+          ]
+        },
+        {
+          "section_id": "exchange-conditions",
+          "heading": "换货条件",
+          "topic": "exchange",
+          "aspects": ["conditions"],
+          "aliases": ["换货要求", "商品完好", "订单信息"],
+          "facts": [
+            {
+              "fact_id": "exchange.conditions.general",
+              "claim_text": "换货商品应保持完好、不影响二次销售，并提供有效订单信息。",
+              "rule_key": "exchange.conditions",
+              "normalized_value": "resalable_with_order",
+              "scope": {},
+              "required_dimensions": []
+            }
+          ]
+        },
+        {
+          "section_id": "exchange-process",
+          "heading": "换货流程与例外",
+          "topic": "exchange",
+          "aspects": ["process", "exception"],
+          "aliases": ["换货流程", "没有库存", "换货失败"],
+          "facts": [
+            {
+              "fact_id": "exchange.process.stock",
+              "claim_text": "换货申请审核通过后，商家在有可用库存时安排替换商品。",
+              "rule_key": "exchange.process",
+              "normalized_value": "replace_if_stock_available",
+              "scope": {},
+              "required_dimensions": []
+            },
+            {
+              "fact_id": "exchange.exception.no-stock",
+              "claim_text": "没有可用库存时不能完成换货，用户可以改为按照退货政策处理。",
+              "rule_key": "exchange.no_stock",
+              "normalized_value": "fallback_to_return",
+              "scope": {},
+              "required_dimensions": []
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

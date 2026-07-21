@@ -1,0 +1,64 @@
+{
+  "schema_version": 1,
+  "corpus_version": "conflict-v1",
+  "documents": [
+    {
+      "document_id": "shipping-policy-a",
+      "title": "退货运费政策 A",
+      "version": "1.0",
+      "effective_from": "2026-01-01",
+      "effective_to": null,
+      "region": "CN",
+      "status": "published",
+      "path": "shipping-a.md",
+      "sections": [
+        {
+          "section_id": "return-shipping-a",
+          "heading": "退货运费规则 A",
+          "topic": "return",
+          "aspects": ["shipping_fee"],
+          "aliases": ["退货运费", "谁承担"],
+          "facts": [
+            {
+              "fact_id": "return.shipping.customer",
+              "claim_text": "无质量问题的退货运费由消费者承担。",
+              "rule_key": "return.shipping_fee",
+              "normalized_value": "customer",
+              "scope": {},
+              "required_dimensions": []
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "document_id": "shipping-policy-b",
+      "title": "退货运费政策 B",
+      "version": "1.0",
+      "effective_from": "2026-01-01",
+      "effective_to": null,
+      "region": "CN",
+      "status": "published",
+      "path": "shipping-b.md",
+      "sections": [
+        {
+          "section_id": "return-shipping-b",
+          "heading": "退货运费规则 B",
+          "topic": "return",
+          "aspects": ["shipping_fee"],
+          "aliases": ["退货运费", "谁承担"],
+          "facts": [
+            {
+              "fact_id": "return.shipping.merchant",
+              "claim_text": "所有退货运费均由商家承担。",
+              "rule_key": "return.shipping_fee",
+              "normalized_value": "merchant",
+              "scope": {},
+              "required_dimensions": []
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

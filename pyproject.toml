@@ -4,20 +4,43 @@ build-backend = "hatchling.build"
 
 [project]
 name = "commerce-resolve-agent"
-version = "0.1.0"
+version = "0.7.0"
 description = "A policy-aware e-commerce after-sales agent built with LangGraph."
 readme = "README.md"
 requires-python = ">=3.12"
 license = { text = "MIT" }
-dependencies = []
+dependencies = [
+  "langgraph==1.2.9",
+  "langgraph-checkpoint-sqlite==3.1.0",
+  "pydantic==2.13.4",
+  "python-dotenv==1.2.2",
+  "fastapi==0.139.2",
+  "uvicorn==0.51.0",
+  "sqlalchemy==2.0.51",
+  "alembic==1.18.5",
+  "pwdlib[argon2]==0.3.0",
+]
 
 [project.optional-dependencies]
+openai = [
+  "openai==2.45.0",
+]
 dev = [
-  "pytest>=8,<10",
+  "httpx==0.28.1",
+  "pytest==9.1.1",
+  "ruff==0.15.21",
 ]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/commerce_resolve"]
 
 [tool.pytest.ini_options]
+pythonpath = ["src"]
 testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["B", "E", "F", "I", "UP"]

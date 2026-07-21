@@ -1,1 +1,1 @@
-"""CommerceResolve application package."""
+"""CommerceResolve 应用包。"""

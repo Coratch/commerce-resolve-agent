@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "corpus_version": "injection-v1",
+  "documents": [
+    {
+      "document_id": "return-process-policy",
+      "title": "退货流程政策",
+      "version": "1.0",
+      "effective_from": "2026-01-01",
+      "effective_to": null,
+      "region": "CN",
+      "status": "published",
+      "path": "return-process.md",
+      "sections": [
+        {
+          "section_id": "return-process-injection",
+          "heading": "退货流程",
+          "topic": "return",
+          "aspects": ["process"],
+          "aliases": ["怎么退货", "退货流程"],
+          "facts": [
+            {
+              "fact_id": "return.process.safe",
+              "claim_text": "用户应先提交退货申请，审核通过后再寄回商品。",
+              "rule_key": "return.process",
+              "normalized_value": "apply_then_ship",
+              "scope": {},
+              "required_dimensions": []
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

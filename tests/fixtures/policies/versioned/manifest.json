@@ -1,0 +1,64 @@
+{
+  "schema_version": 1,
+  "corpus_version": "versioned-v1",
+  "documents": [
+    {
+      "document_id": "return-window-policy",
+      "title": "历史退货期限政策",
+      "version": "0.9",
+      "effective_from": "2025-01-01",
+      "effective_to": "2025-12-31",
+      "region": "CN",
+      "status": "published",
+      "path": "window-old.md",
+      "sections": [
+        {
+          "section_id": "return-window-old",
+          "heading": "历史退货期限",
+          "topic": "return",
+          "aspects": ["window"],
+          "aliases": ["退货期限"],
+          "facts": [
+            {
+              "fact_id": "return.window.old",
+              "claim_text": "普通商品签收后 14 天内可以申请退货。",
+              "rule_key": "return.window_days",
+              "normalized_value": "14",
+              "scope": {},
+              "required_dimensions": []
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "document_id": "return-window-policy",
+      "title": "当前退货期限政策",
+      "version": "1.0",
+      "effective_from": "2026-01-01",
+      "effective_to": null,
+      "region": "CN",
+      "status": "published",
+      "path": "window-current.md",
+      "sections": [
+        {
+          "section_id": "return-window-current",
+          "heading": "当前退货期限",
+          "topic": "return",
+          "aspects": ["window"],
+          "aliases": ["退货期限"],
+          "facts": [
+            {
+              "fact_id": "return.window.current",
+              "claim_text": "普通商品签收后 7 天内可以申请退货。",
+              "rule_key": "return.window_days",
+              "normalized_value": "7",
+              "scope": {},
+              "required_dimensions": []
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

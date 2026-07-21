@@ -1,0 +1,74 @@
+.page {
+  display: grid;
+  min-height: calc(100vh - 80px);
+  place-items: center;
+  padding: 3rem 1.25rem;
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 1.5rem;
+  box-shadow: var(--shadow);
+  max-width: 440px;
+  padding: 2rem;
+  width: 100%;
+}
+
+.card h1 {
+  font-family: var(--display);
+  font-size: 2rem;
+  margin: 0 0 0.45rem;
+}
+
+.card > p {
+  color: var(--muted);
+  line-height: 1.6;
+  margin: 0 0 1.6rem;
+}
+
+.form {
+  display: grid;
+  gap: 1rem;
+}
+
+.form label {
+  color: var(--muted);
+  display: grid;
+  font-size: 0.82rem;
+  font-weight: 700;
+  gap: 0.4rem;
+}
+
+.form input {
+  background: white;
+  border: 1px solid var(--line);
+  border-radius: 0.75rem;
+  font: inherit;
+  padding: 0.8rem;
+}
+
+.form button {
+  background: var(--accent);
+  border: 0;
+  border-radius: 0.75rem;
+  color: white;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 800;
+  padding: 0.85rem;
+}
+
+.error {
+  background: var(--danger-soft);
+  border-radius: 0.7rem;
+  color: var(--danger);
+  padding: 0.8rem;
+}
+
+.success {
+  background: var(--success-soft);
+  border-radius: 0.7rem;
+  color: var(--success);
+  padding: 0.8rem;
+}
