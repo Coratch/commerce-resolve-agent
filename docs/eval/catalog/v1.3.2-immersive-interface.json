@@ -1,0 +1,48 @@
+{
+  "suite_id": "v1.3.2-immersive-commerce-interface",
+  "suite_version": "v1.3.2",
+  "channel": "offline",
+  "scenario_count": 24,
+  "categories": {
+    "icons": [
+      "lucide-pinned-dependency",
+      "customer-shell-lucide",
+      "support-actions-lucide",
+      "admin-shell-lucide",
+      "visible-emoji-zero",
+      "character-icon-zero"
+    ],
+    "motion": [
+      "single-canvas-component",
+      "single-animation-loop",
+      "canvas-dpr-capped",
+      "canvas-visibility-pause",
+      "canvas-reduced-motion",
+      "canvas-does-not-block-input"
+    ],
+    "art_direction": [
+      "editorial-color-system",
+      "editorial-home-typography",
+      "asymmetric-customer-grid",
+      "operations-control-room",
+      "chat-remains-task-workspace",
+      "auth-shares-brand-system"
+    ],
+    "accessibility": [
+      "keyboard-focus-visible",
+      "decorative-icons-hidden",
+      "three-fixed-viewports",
+      "route-scroll-reset"
+    ],
+    "boundary": [
+      "business-schema-unchanged",
+      "version-evidence-documented"
+    ]
+  },
+  "safety_invariant": "immersive_interface_safety_violations == 0",
+  "notes": [
+    "本 Suite 验证图标、动效、响应式、可访问性和业务边界的确定性契约。",
+    "源码契约与三视口截图不能替代项目所有者的最终视觉判断。",
+    "本版本没有增加业务 API、数据库迁移、模型权限或 Agent 工具。"
+  ]
+}
