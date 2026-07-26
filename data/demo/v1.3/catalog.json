@@ -1,0 +1,235 @@
+{
+  "schema_version": 1,
+  "catalog_version": "v1.3",
+  "asset_manifest": "frontend/public/catalog/v1.3/assets.json",
+  "products": [
+    {
+      "product_ref": "audio-buds-pro",
+      "title": "Auralite Pro 无线降噪耳机",
+      "category": "digital",
+      "image_ref": "product-earbuds",
+      "skus": [
+        {"sku": "AUD-BUD-PRO-BLK", "variant_title": "曜石黑", "unit_amount_minor": 89900, "currency": "CNY"},
+        {"sku": "AUD-BUD-PRO-WHT", "variant_title": "云雾白", "unit_amount_minor": 89900, "currency": "CNY"}
+      ]
+    },
+    {
+      "product_ref": "thermal-travel-mug",
+      "title": "FlowSip 随行保温杯",
+      "category": "general",
+      "image_ref": "product-travel-mug",
+      "skus": [
+        {"sku": "DEMO-MUG-01", "variant_title": "420ml·雾霾蓝", "unit_amount_minor": 12900, "currency": "CNY"},
+        {"sku": "MUG-FLOW-600-BLU", "variant_title": "600ml·雾霾蓝", "unit_amount_minor": 15900, "currency": "CNY"}
+      ]
+    },
+    {
+      "product_ref": "swift-runner",
+      "title": "SwiftRun 轻量缓震跑鞋",
+      "category": "apparel",
+      "image_ref": "product-running-shoes",
+      "skus": [
+        {"sku": "SHOE-SWIFT-GRY-42", "variant_title": "灰白·42码", "unit_amount_minor": 49900, "currency": "CNY"},
+        {"sku": "SHOE-SWIFT-GRY-43", "variant_title": "灰白·43码", "unit_amount_minor": 49900, "currency": "CNY"}
+      ]
+    },
+    {
+      "product_ref": "metro-backpack",
+      "title": "MetroPack 城市通勤双肩包",
+      "category": "general",
+      "image_ref": "product-backpack",
+      "skus": [
+        {"sku": "BAG-METRO-20-GRY", "variant_title": "20L·深灰", "unit_amount_minor": 32900, "currency": "CNY"},
+        {"sku": "BAG-METRO-26-GRY", "variant_title": "26L·深灰", "unit_amount_minor": 39900, "currency": "CNY"}
+      ]
+    },
+    {
+      "product_ref": "focus-desk-lamp",
+      "title": "FocusBeam 可调光台灯",
+      "category": "general",
+      "image_ref": "product-desk-lamp",
+      "skus": [
+        {"sku": "LAMP-FOCUS-BLK", "variant_title": "哑光黑", "unit_amount_minor": 26900, "currency": "CNY"}
+      ]
+    },
+    {
+      "product_ref": "pulse-smartwatch",
+      "title": "Pulse S2 运动智能手表",
+      "category": "digital",
+      "image_ref": "product-smartwatch",
+      "skus": [
+        {"sku": "WATCH-PULSE-S2-BLK", "variant_title": "44mm·曜石黑", "unit_amount_minor": 109900, "currency": "CNY"},
+        {"sku": "WATCH-PULSE-S2-SLV", "variant_title": "44mm·星光银", "unit_amount_minor": 109900, "currency": "CNY"}
+      ]
+    },
+    {
+      "product_ref": "craft-keyboard",
+      "title": "Craft75 无线机械键盘",
+      "category": "digital",
+      "image_ref": "product-keyboard",
+      "skus": [
+        {"sku": "KEY-CRAFT75-CREAM", "variant_title": "奶油白·茶轴", "unit_amount_minor": 62900, "currency": "CNY"},
+        {"sku": "KEY-CRAFT75-GRAY", "variant_title": "岩灰·茶轴", "unit_amount_minor": 62900, "currency": "CNY"}
+      ]
+    },
+    {
+      "product_ref": "calm-skincare-set",
+      "title": "Calm Dew 舒缓护肤礼盒",
+      "category": "hygiene",
+      "image_ref": "product-skincare-set",
+      "skus": [
+        {"sku": "SKIN-CALM-SET", "variant_title": "洁面·精华·面霜", "unit_amount_minor": 45900, "currency": "CNY"}
+      ]
+    },
+    {
+      "product_ref": "fresh-blender",
+      "title": "FreshMix Pro 多功能料理机",
+      "category": "general",
+      "image_ref": "product-blender",
+      "skus": [
+        {"sku": "HOME-BLEND-PRO", "variant_title": "1.5L·银灰", "unit_amount_minor": 69900, "currency": "CNY"}
+      ]
+    },
+    {
+      "product_ref": "essential-hoodie",
+      "title": "Everyday 重磅连帽卫衣",
+      "category": "apparel",
+      "image_ref": "product-hoodie",
+      "skus": [
+        {"sku": "HOOD-EVERY-GRY-M", "variant_title": "烟灰·M", "unit_amount_minor": 29900, "currency": "CNY"},
+        {"sku": "HOOD-EVERY-GRY-L", "variant_title": "烟灰·L", "unit_amount_minor": 29900, "currency": "CNY"}
+      ]
+    },
+    {
+      "product_ref": "mirrorless-camera",
+      "title": "FrameOne 便携微单相机",
+      "category": "digital",
+      "image_ref": "product-camera",
+      "skus": [
+        {"sku": "CAM-FRAME-18-50", "variant_title": "黑色·18-50mm套机", "unit_amount_minor": 569900, "currency": "CNY"}
+      ]
+    },
+    {
+      "product_ref": "voyage-suitcase",
+      "title": "Voyage 20寸登机箱",
+      "category": "general",
+      "image_ref": "product-suitcase",
+      "skus": [
+        {"sku": "CASE-VOY-20-SLV", "variant_title": "20寸·星河银", "unit_amount_minor": 52900, "currency": "CNY"}
+      ]
+    }
+  ],
+  "personas": [
+    {"persona_id": "steady-shopper", "name": "稳健型常客", "description": "关注订单状态、承诺时效和明确下一步。"},
+    {"persona_id": "urgent-traveler", "name": "时效敏感旅客", "description": "近期出行，优先关注多包裹和预计送达。"},
+    {"persona_id": "careful-returner", "name": "谨慎售后用户", "description": "会同时核对物流、政策与退款资格。"}
+  ],
+  "scenarios": [
+    {
+      "scenario_id": "processing-new-order",
+      "persona_id": "steady-shopper",
+      "order_id": "ORD-V13-001",
+      "status": "processing",
+      "items": [{"sku": "AUD-BUD-PRO-BLK", "quantity": 1}],
+      "packages": [],
+      "payment": {"channel": "mock_card", "status": "settled"}
+    },
+    {
+      "scenario_id": "single-package-shipping",
+      "persona_id": "steady-shopper",
+      "order_id": "ORD-001",
+      "status": "shipped",
+      "items": [{"sku": "DEMO-MUG-01", "quantity": 1}],
+      "packages": [
+        {"package_id": "PKG-001", "carrier": "顺丰速运", "tracking_number": "SF-V13-0001", "status": "in_transit", "last_event": "包裹已离开上海转运中心", "estimated_delivery_at": "2026-07-26", "items": [{"sku": "DEMO-MUG-01", "quantity": 1}]}
+      ],
+      "payment": {"channel": "mock_wallet", "status": "settled"}
+    },
+    {
+      "scenario_id": "multi-package-shipping",
+      "persona_id": "urgent-traveler",
+      "order_id": "ORD-V13-003",
+      "status": "shipped",
+      "items": [{"sku": "BAG-METRO-20-GRY", "quantity": 1}, {"sku": "CASE-VOY-20-SLV", "quantity": 1}],
+      "packages": [
+        {"package_id": "PKG-002-A", "carrier": "京东物流", "tracking_number": "JD-V13-0002", "status": "delivered", "last_event": "通勤包已由本人签收", "estimated_delivery_at": "2026-07-23", "items": [{"sku": "BAG-METRO-20-GRY", "quantity": 1}]},
+        {"package_id": "PKG-002-B", "carrier": "顺丰速运", "tracking_number": "SF-V13-0003", "status": "in_transit", "last_event": "登机箱正在派送中", "estimated_delivery_at": "2026-07-24", "items": [{"sku": "CASE-VOY-20-SLV", "quantity": 1}]}
+      ],
+      "payment": {"channel": "mock_card", "status": "settled"}
+    },
+    {
+      "scenario_id": "partial-fulfillment",
+      "persona_id": "urgent-traveler",
+      "order_id": "ORD-V13-004",
+      "status": "shipped",
+      "items": [{"sku": "SHOE-SWIFT-GRY-42", "quantity": 1}, {"sku": "HOOD-EVERY-GRY-M", "quantity": 2}],
+      "packages": [
+        {"package_id": "PKG-003-A", "carrier": "圆通速递", "tracking_number": "YT-V13-0004", "status": "delivered", "last_event": "跑鞋已签收", "estimated_delivery_at": "2026-07-22", "items": [{"sku": "SHOE-SWIFT-GRY-42", "quantity": 1}]},
+        {"package_id": "PKG-003-B", "carrier": "圆通速递", "tracking_number": "YT-V13-0005", "status": "preparing", "last_event": "卫衣正在仓库配货", "estimated_delivery_at": "2026-07-27", "items": [{"sku": "HOOD-EVERY-GRY-M", "quantity": 2}]}
+      ],
+      "payment": {"channel": "mock_wallet", "status": "settled"}
+    },
+    {
+      "scenario_id": "delivered-refundable",
+      "persona_id": "careful-returner",
+      "order_id": "ORD-V13-005",
+      "status": "delivered",
+      "items": [{"sku": "KEY-CRAFT75-CREAM", "quantity": 1}],
+      "packages": [
+        {"package_id": "PKG-004", "carrier": "顺丰速运", "tracking_number": "SF-V13-0006", "status": "delivered", "last_event": "商品已由本人签收", "estimated_delivery_at": "2026-07-20", "items": [{"sku": "KEY-CRAFT75-CREAM", "quantity": 1}]}
+      ],
+      "payment": {"channel": "mock_card", "status": "settled"}
+    },
+    {
+      "scenario_id": "delivered-hygiene-policy",
+      "persona_id": "careful-returner",
+      "order_id": "ORD-V13-006",
+      "status": "delivered",
+      "items": [{"sku": "SKIN-CALM-SET", "quantity": 1}],
+      "packages": [
+        {"package_id": "PKG-005", "carrier": "中通快递", "tracking_number": "ZT-V13-0007", "status": "delivered", "last_event": "护肤礼盒已签收", "estimated_delivery_at": "2026-07-21", "items": [{"sku": "SKIN-CALM-SET", "quantity": 1}]}
+      ],
+      "payment": {"channel": "mock_wallet", "status": "settled"}
+    },
+    {
+      "scenario_id": "shipping-refund-question",
+      "persona_id": "careful-returner",
+      "order_id": "ORD-V13-007",
+      "status": "shipped",
+      "items": [{"sku": "WATCH-PULSE-S2-BLK", "quantity": 1}],
+      "packages": [
+        {"package_id": "PKG-006", "carrier": "顺丰速运", "tracking_number": "SF-V13-0008", "status": "in_transit", "last_event": "包裹正在杭州分拨中心处理中", "estimated_delivery_at": "2026-07-25", "items": [{"sku": "WATCH-PULSE-S2-BLK", "quantity": 1}]}
+      ],
+      "payment": {"channel": "mock_card", "status": "settled"}
+    },
+    {
+      "scenario_id": "cancelled-order",
+      "persona_id": "steady-shopper",
+      "order_id": "ORD-V13-008",
+      "status": "cancelled",
+      "items": [{"sku": "LAMP-FOCUS-BLK", "quantity": 1}],
+      "packages": [],
+      "payment": {"channel": "mock_wallet", "status": "failed"}
+    },
+    {
+      "scenario_id": "no-shipment-yet",
+      "persona_id": "steady-shopper",
+      "order_id": "ORD-V13-009",
+      "status": "processing",
+      "items": [{"sku": "HOME-BLEND-PRO", "quantity": 1}, {"sku": "MUG-FLOW-600-BLU", "quantity": 1}],
+      "packages": [],
+      "payment": {"channel": "mock_card", "status": "settled"}
+    },
+    {
+      "scenario_id": "premium-delivered-order",
+      "persona_id": "careful-returner",
+      "order_id": "ORD-V13-010",
+      "status": "delivered",
+      "items": [{"sku": "CAM-FRAME-18-50", "quantity": 1}],
+      "packages": [
+        {"package_id": "PKG-007", "carrier": "京东物流", "tracking_number": "JD-V13-0009", "status": "delivered", "last_event": "相机套机已签收并完成外包装验收", "estimated_delivery_at": "2026-07-19", "items": [{"sku": "CAM-FRAME-18-50", "quantity": 1}]}
+      ],
+      "payment": {"channel": "mock_card", "status": "settled"}
+    }
+  ]
+}

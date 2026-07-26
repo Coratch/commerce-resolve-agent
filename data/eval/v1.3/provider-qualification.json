@@ -1,0 +1,289 @@
+{
+  "dataset_version": "provider-qualification-v1.3",
+  "scenarios": [
+    {
+      "scenario_id": "combo-shipment-refund-eligibility",
+      "category": "combined-guidance",
+      "adapter": "interpreter",
+      "input_text": "ORD-001 的物流到哪了，并且现在能不能退款？",
+      "expected": {
+        "interpretation": {
+          "intent": "service_guidance",
+          "order_id": "ORD-001",
+          "policy_query": {
+            "topic": "refund",
+            "aspects": ["conditions"],
+            "search_terms": [],
+            "product_category": null,
+            "opened": null,
+            "region": "CN",
+            "specific_order_eligibility": true
+          },
+          "concerns": ["shipment_status", "refund_eligibility"],
+          "goal_summary": "核对订单物流和退款资格",
+          "refund_reason": null,
+          "l2_issue_summary": null
+        },
+        "required_aspects": ["conditions"]
+      }
+    },
+    {
+      "scenario_id": "combo-order-shipment",
+      "category": "combined-guidance",
+      "adapter": "interpreter",
+      "input_text": "请告诉我 ORD-002 的订单状态和快递进度",
+      "expected": {
+        "interpretation": {
+          "intent": "service_guidance",
+          "order_id": "ORD-002",
+          "policy_query": null,
+          "concerns": ["order_status", "shipment_status"],
+          "goal_summary": "核对订单状态和物流进度",
+          "refund_reason": null,
+          "l2_issue_summary": null
+        }
+      }
+    },
+    {
+      "scenario_id": "combo-shipment-return-policy",
+      "category": "combined-guidance",
+      "adapter": "interpreter",
+      "input_text": "ORD-003 什么时候送到，收到后几天内可以退货？",
+      "expected": {
+        "interpretation": {
+          "intent": "service_guidance",
+          "order_id": "ORD-003",
+          "policy_query": {
+            "topic": "return",
+            "aspects": ["window"],
+            "search_terms": [],
+            "product_category": null,
+            "opened": null,
+            "region": "CN",
+            "specific_order_eligibility": false
+          },
+          "concerns": ["shipment_status", "policy"],
+          "goal_summary": "核对物流进度和退货期限",
+          "refund_reason": null,
+          "l2_issue_summary": null
+        },
+        "required_aspects": ["window"]
+      }
+    },
+    {
+      "scenario_id": "combo-order-refund-eligibility",
+      "category": "combined-guidance",
+      "adapter": "interpreter",
+      "input_text": "ORD-004 现在是什么状态，也帮我判断是否符合退款条件",
+      "expected": {
+        "interpretation": {
+          "intent": "service_guidance",
+          "order_id": "ORD-004",
+          "policy_query": {
+            "topic": "refund",
+            "aspects": ["conditions"],
+            "search_terms": [],
+            "product_category": null,
+            "opened": null,
+            "region": "CN",
+            "specific_order_eligibility": true
+          },
+          "concerns": ["order_status", "refund_eligibility"],
+          "goal_summary": "核对订单状态和退款资格",
+          "refund_reason": null,
+          "l2_issue_summary": null
+        },
+        "required_aspects": ["conditions"]
+      }
+    },
+    {
+      "scenario_id": "combo-policy-refund-method",
+      "category": "combined-guidance",
+      "adapter": "interpreter",
+      "input_text": "ORD-005 能退款吗，符合条件的话退款会原路返回吗？",
+      "expected": {
+        "interpretation": {
+          "intent": "service_guidance",
+          "order_id": "ORD-005",
+          "policy_query": {
+            "topic": "refund",
+            "aspects": ["conditions", "method"],
+            "search_terms": [],
+            "product_category": null,
+            "opened": null,
+            "region": "CN",
+            "specific_order_eligibility": true
+          },
+          "concerns": ["policy", "refund_eligibility"],
+          "goal_summary": "核对退款资格和退款方式",
+          "refund_reason": null,
+          "l2_issue_summary": null
+        },
+        "required_aspects": ["conditions", "method"]
+      }
+    },
+    {
+      "scenario_id": "combo-all-concerns",
+      "category": "combined-guidance",
+      "adapter": "interpreter",
+      "input_text": "帮我查 ORD-006 的订单和物流状态、退货规则，以及是否能退款",
+      "expected": {
+        "interpretation": {
+          "intent": "service_guidance",
+          "order_id": "ORD-006",
+          "policy_query": {
+            "topic": "refund",
+            "aspects": ["conditions", "process"],
+            "search_terms": [],
+            "product_category": null,
+            "opened": null,
+            "region": "CN",
+            "specific_order_eligibility": true
+          },
+          "concerns": [
+            "order_status",
+            "shipment_status",
+            "policy",
+            "refund_eligibility"
+          ],
+          "goal_summary": "综合核对订单、物流、政策和退款资格",
+          "refund_reason": null,
+          "l2_issue_summary": null
+        },
+        "required_aspects": ["conditions"]
+      }
+    },
+    {
+      "scenario_id": "combo-lowercase-order-id",
+      "category": "boundary",
+      "adapter": "interpreter",
+      "input_text": "ord-007 到哪了，签收以后还能退款吗",
+      "expected": {
+        "interpretation": {
+          "intent": "service_guidance",
+          "order_id": "ORD-007",
+          "policy_query": {
+            "topic": "refund",
+            "aspects": ["conditions"],
+            "search_terms": [],
+            "product_category": null,
+            "opened": null,
+            "region": "CN",
+            "specific_order_eligibility": true
+          },
+          "concerns": ["shipment_status", "refund_eligibility"],
+          "goal_summary": "核对物流和签收后的退款资格",
+          "refund_reason": null,
+          "l2_issue_summary": null
+        },
+        "required_aspects": ["conditions"]
+      }
+    },
+    {
+      "scenario_id": "combo-missing-order-id",
+      "category": "boundary",
+      "adapter": "interpreter",
+      "input_text": "我的包裹到哪了，而且现在还能不能退款？",
+      "expected": {
+        "interpretation": {
+          "intent": "service_guidance",
+          "order_id": null,
+          "policy_query": {
+            "topic": "refund",
+            "aspects": ["conditions"],
+            "search_terms": [],
+            "product_category": null,
+            "opened": null,
+            "region": "CN",
+            "specific_order_eligibility": true
+          },
+          "concerns": ["shipment_status", "refund_eligibility"],
+          "goal_summary": "核对物流和退款资格",
+          "refund_reason": null,
+          "l2_issue_summary": null
+        },
+        "required_aspects": ["conditions"]
+      }
+    },
+    {
+      "scenario_id": "boundary-explicit-refund-action",
+      "category": "boundary",
+      "adapter": "interpreter",
+      "input_text": "请为 ORD-008 发起退款，商品有质量问题",
+      "expected": {
+        "interpretation": {
+          "intent": "refund_request",
+          "order_id": "ORD-008",
+          "policy_query": null,
+          "concerns": [],
+          "goal_summary": null,
+          "refund_reason": {
+            "code": "quality_issue",
+            "detail": "商品有质量问题"
+          },
+          "l2_issue_summary": null
+        }
+      }
+    },
+    {
+      "scenario_id": "boundary-single-order",
+      "category": "boundary",
+      "adapter": "interpreter",
+      "input_text": "查询 ORD-009 的订单状态",
+      "expected": {
+        "interpretation": {
+          "intent": "order_inquiry",
+          "order_id": "ORD-009",
+          "policy_query": null,
+          "concerns": [],
+          "goal_summary": null,
+          "refund_reason": null,
+          "l2_issue_summary": null
+        }
+      }
+    },
+    {
+      "scenario_id": "boundary-single-policy",
+      "category": "boundary",
+      "adapter": "interpreter",
+      "input_text": "普通商品退货需要满足什么条件？",
+      "expected": {
+        "interpretation": {
+          "intent": "policy_inquiry",
+          "order_id": null,
+          "policy_query": {
+            "topic": "return",
+            "aspects": ["conditions"],
+            "search_terms": [],
+            "product_category": "general",
+            "opened": null,
+            "region": "CN",
+            "specific_order_eligibility": false
+          },
+          "concerns": [],
+          "goal_summary": null,
+          "refund_reason": null,
+          "l2_issue_summary": null
+        },
+        "required_aspects": ["conditions"]
+      }
+    },
+    {
+      "scenario_id": "boundary-unsupported-write",
+      "category": "boundary",
+      "adapter": "interpreter",
+      "input_text": "把 ORD-010 的收货地址直接改成公司",
+      "expected": {
+        "interpretation": {
+          "intent": "unsupported_write",
+          "order_id": "ORD-010",
+          "policy_query": null,
+          "concerns": [],
+          "goal_summary": null,
+          "refund_reason": null,
+          "l2_issue_summary": null
+        }
+      }
+    }
+  ]
+}

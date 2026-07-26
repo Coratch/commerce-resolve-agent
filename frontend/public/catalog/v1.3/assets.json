@@ -1,0 +1,104 @@
+{
+  "schema_version": 1,
+  "catalog_version": "v1.3",
+  "generation": {
+    "tool": "OpenAI image generation",
+    "date": "2026-07-23",
+    "source_file": "data/demo/v1.3/product-source.png",
+    "source_sha256": "15ff51c93981a031af9d295dfffa7f79cf324a6d1f69c829d952243b7ff2f4b4",
+    "prompt": "Create one clean premium e-commerce product photography contact sheet in a strict 4-column by 3-row grid, exactly 12 square cells. Each cell contains one isolated product on a warm off-white studio background: wireless earbuds, travel mug, running shoes, backpack, desk lamp, smartwatch, mechanical keyboard, skincare set, countertop blender, hoodie, mirrorless camera, hard-shell suitcase. Consistent soft shadow, three-quarter view, no text, no logos, no people, no watermarks, no overlaps, equal margins, polished Shopify-style catalog photography."
+  },
+  "assets": [
+    {
+      "asset_id": "product-earbuds",
+      "relative_path": "catalog/v1.3/earbuds.webp",
+      "sha256": "84db9b6bba63b339aba66bf79fe203a0d5a8b5a0a0a1d75ebbbfca88f722abd6",
+      "alt": "曜石黑无线降噪耳机与充电盒",
+      "source": "generated"
+    },
+    {
+      "asset_id": "product-travel-mug",
+      "relative_path": "catalog/v1.3/travel-mug.webp",
+      "sha256": "a18938e2d2817916bd0f5602040cc0c48452a45a05888bd213d2da645a6af4ee",
+      "alt": "雾霾蓝便携保温杯",
+      "source": "generated"
+    },
+    {
+      "asset_id": "product-running-shoes",
+      "relative_path": "catalog/v1.3/running-shoes.webp",
+      "sha256": "7fd93b659f90da983393ec2b971a114b122d2322b1801862e6ce514e9659fb4a",
+      "alt": "灰白色轻量缓震跑鞋",
+      "source": "generated"
+    },
+    {
+      "asset_id": "product-backpack",
+      "relative_path": "catalog/v1.3/backpack.webp",
+      "sha256": "3b512b4e352a8d7f428016e237ef5c2861e2807ec3f61e6b48878bfffd25de9d",
+      "alt": "深灰色城市通勤双肩包",
+      "source": "generated"
+    },
+    {
+      "asset_id": "product-desk-lamp",
+      "relative_path": "catalog/v1.3/desk-lamp.webp",
+      "sha256": "4b413a4ce75c54e27fe471fb66832af3147aad105e5a4826f4bd81e95d55a245",
+      "alt": "黑色可调光金属台灯",
+      "source": "generated"
+    },
+    {
+      "asset_id": "product-smartwatch",
+      "relative_path": "catalog/v1.3/smartwatch.webp",
+      "sha256": "e60fe596dc1f351c1022e60efb8b3e5fa413844ef6d8daa9335b7c845d6cc354",
+      "alt": "黑色方形运动智能手表",
+      "source": "generated"
+    },
+    {
+      "asset_id": "product-keyboard",
+      "relative_path": "catalog/v1.3/keyboard.webp",
+      "sha256": "97d4f282ef388b2b1b42ba1c306e8a4c73b76583a201e7cce058c1b23b9fb54b",
+      "alt": "米白色紧凑机械键盘",
+      "source": "generated"
+    },
+    {
+      "asset_id": "product-skincare-set",
+      "relative_path": "catalog/v1.3/skincare-set.webp",
+      "sha256": "3afe416ad21f7f652e7020ee953683e67d45165be6fca4f3254450036c545b6e",
+      "alt": "粉白色三件套护肤礼盒",
+      "source": "generated"
+    },
+    {
+      "asset_id": "product-blender",
+      "relative_path": "catalog/v1.3/blender.webp",
+      "sha256": "579c0324ee45b85fa5df91f4800057fefc0809b6f50372ce43887c3377cd8c56",
+      "alt": "银灰色家用多功能料理机",
+      "source": "generated"
+    },
+    {
+      "asset_id": "product-hoodie",
+      "relative_path": "catalog/v1.3/hoodie.webp",
+      "sha256": "3e2fa568e4380d3dada04b01fd019de6b9c86d025af5d3412c4f2206270d09f1",
+      "alt": "烟灰色基础连帽卫衣",
+      "source": "generated"
+    },
+    {
+      "asset_id": "product-camera",
+      "relative_path": "catalog/v1.3/camera.webp",
+      "sha256": "2135b77e637fc3ba04ed2ea5977e6f2fcb336647b91728c925d12c3b2cadccb6",
+      "alt": "黑色轻便微单相机与镜头",
+      "source": "generated"
+    },
+    {
+      "asset_id": "product-suitcase",
+      "relative_path": "catalog/v1.3/suitcase.webp",
+      "sha256": "fbec1aea2f6d58c0f2c3b0cc5ed5b1354c5c4a6f31b6ec295e6d94d13bed5e1c",
+      "alt": "银灰色竖纹登机箱",
+      "source": "generated"
+    },
+    {
+      "asset_id": "product-fallback",
+      "relative_path": "catalog/v1.3/fallback.svg",
+      "sha256": "40cfaabdbaf9655952639b4b3dbb4b999dd5129f41feb0bf7e538dbac188d9b6",
+      "alt": "商品图片暂不可用",
+      "source": "project"
+    }
+  ]
+}

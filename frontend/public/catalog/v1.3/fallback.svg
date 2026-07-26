@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 362 362" role="img" aria-labelledby="title desc">
+  <title id="title">商品图片暂不可用</title>
+  <desc id="desc">CommerceResolve 商品图片占位图</desc>
+  <rect width="362" height="362" rx="28" fill="#f4f1ea"/>
+  <path d="M111 119h140v124H111z" fill="#fff" stroke="#c8c1b6" stroke-width="8"/>
+  <path d="m126 222 42-48 27 28 21-23 28 43" fill="none" stroke="#7d756a" stroke-linecap="round" stroke-linejoin="round" stroke-width="10"/>
+  <circle cx="213" cy="151" r="14" fill="#d6a85f"/>
+  <text x="181" y="282" fill="#615a51" font-family="-apple-system,BlinkMacSystemFont,sans-serif" font-size="18" text-anchor="middle">图片暂不可用</text>
+</svg>
