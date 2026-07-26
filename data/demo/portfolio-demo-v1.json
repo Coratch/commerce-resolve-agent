@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "dataset_version": "portfolio-demo-v1",
+  "source_catalog_version": "v1.3",
+  "scenarios": [
+    {
+      "scenario_key": "refundable_delay",
+      "source_scenario_id": "shipping-refund-question",
+      "order_status": "processing",
+      "order_age_days": 9,
+      "shipment": {
+        "status": "preparing",
+        "carrier": "顺丰速运",
+        "last_event": "商家已发货，但承运商连续 7 天未完成揽收",
+        "estimated_delivery_offset_days": -3,
+        "event_age_days": 7
+      }
+    },
+    {
+      "scenario_key": "quality_issue",
+      "source_scenario_id": "delivered-refundable",
+      "order_status": "delivered",
+      "order_age_days": 6,
+      "shipment": {
+        "status": "delivered",
+        "carrier": "顺丰速运",
+        "last_event": "商品已签收，客户反馈使用时出现间歇性失灵",
+        "estimated_delivery_offset_days": -2,
+        "event_age_days": 2
+      }
+    },
+    {
+      "scenario_key": "expired_refund",
+      "source_scenario_id": "single-package-shipping",
+      "order_status": "delivered",
+      "order_age_days": 35,
+      "shipment": {
+        "status": "delivered",
+        "carrier": "顺丰速运",
+        "last_event": "商品已于 20 天前签收，已超过 7 天无理由退货期限",
+        "estimated_delivery_offset_days": -20,
+        "event_age_days": 20
+      }
+    }
+  ]
+}

@@ -1,0 +1,238 @@
+.page {
+  background:
+    radial-gradient(circle at 78% 18%, rgba(197, 255, 72, 0.17), transparent 23rem),
+    #071914;
+  color: #f5f6ec;
+  min-height: 100vh;
+  overflow: hidden;
+}
+
+.topbar {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  margin: 0 auto;
+  max-width: 1480px;
+  padding: 1.2rem clamp(1rem, 4vw, 4rem);
+}
+
+.brand {
+  align-items: center;
+  color: inherit;
+  display: inline-flex;
+  gap: 0.7rem;
+  text-decoration: none;
+}
+
+.brand span {
+  align-items: center;
+  background: var(--electric);
+  border-radius: 50%;
+  color: var(--night);
+  display: inline-flex;
+  font-family: var(--display);
+  height: 2.5rem;
+  justify-content: center;
+  width: 2.5rem;
+}
+
+.topbar nav {
+  align-items: center;
+  display: flex;
+  gap: 1.2rem;
+}
+
+.topbar nav a {
+  color: rgba(245, 246, 236, 0.68);
+  font-size: 0.82rem;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.topbar nav .inviteLink {
+  background: var(--electric);
+  border-radius: 999px;
+  color: var(--night);
+  padding: 0.7rem 0.95rem;
+}
+
+.hero {
+  align-items: end;
+  display: grid;
+  gap: clamp(2rem, 6vw, 7rem);
+  grid-template-columns: minmax(0, 1fr) minmax(19rem, 0.35fr);
+  margin: 0 auto;
+  max-width: 1480px;
+  min-height: 74vh;
+  padding: clamp(3rem, 8vw, 8rem) clamp(1rem, 4vw, 4rem);
+}
+
+.eyebrow,
+.workflow > span,
+.evidence span {
+  color: var(--electric);
+  font-family: var(--mono);
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.15em;
+}
+
+.hero h1 {
+  font-family: var(--display);
+  font-size: clamp(4rem, 9.5vw, 10.5rem);
+  letter-spacing: -0.09em;
+  line-height: 0.78;
+  margin: 1.5rem 0 2rem;
+  max-width: 8.5ch;
+}
+
+.hero h1 em {
+  color: var(--electric);
+  display: block;
+  font-style: normal;
+}
+
+.hero p {
+  color: rgba(245, 246, 236, 0.63);
+  font-size: clamp(0.95rem, 1.4vw, 1.12rem);
+  line-height: 1.8;
+  max-width: 42rem;
+}
+
+.actions {
+  display: flex;
+  gap: 0.8rem;
+  margin-top: 2rem;
+}
+
+.actions a {
+  align-items: center;
+  border: 1px solid rgba(245, 246, 236, 0.2);
+  border-radius: 999px;
+  color: #f5f6ec;
+  display: inline-flex;
+  font-weight: 800;
+  gap: 0.5rem;
+  padding: 0.85rem 1rem;
+  text-decoration: none;
+}
+
+.actions a:first-child {
+  background: var(--electric);
+  border-color: var(--electric);
+  color: var(--night);
+}
+
+.proofCard {
+  background: rgba(245, 246, 236, 0.06);
+  border: 1px solid rgba(245, 246, 236, 0.14);
+  border-radius: 1.4rem;
+  padding: 1.4rem;
+}
+
+.proofCard > span {
+  color: rgba(245, 246, 236, 0.52);
+  font-size: 0.7rem;
+  text-transform: uppercase;
+}
+
+.proofCard ol {
+  display: grid;
+  gap: 0.8rem;
+  list-style: none;
+  margin: 1.5rem 0;
+  padding: 0;
+}
+
+.proofCard li {
+  align-items: center;
+  border-bottom: 1px solid rgba(245, 246, 236, 0.1);
+  display: flex;
+  gap: 0.55rem;
+  padding-bottom: 0.75rem;
+}
+
+.proofCard li svg {
+  color: var(--electric);
+}
+
+.proofCard strong {
+  color: var(--electric);
+}
+
+.workflow {
+  background: #f4f5ec;
+  color: var(--night);
+  padding: clamp(3rem, 8vw, 7rem) clamp(1rem, 5vw, 6rem);
+}
+
+.workflow > h2 {
+  font-family: var(--display);
+  font-size: clamp(2.6rem, 6vw, 6.5rem);
+  letter-spacing: -0.07em;
+  line-height: 0.92;
+  max-width: 12ch;
+}
+
+.workflow > div {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin-top: 3rem;
+}
+
+.workflow article {
+  border-left: 1px solid rgba(7, 25, 20, 0.18);
+  min-height: 13rem;
+  padding: 1rem 1.2rem;
+}
+
+.workflow article > span {
+  color: var(--accent-dark);
+  font-family: var(--mono);
+}
+
+.workflow h3 {
+  font-family: var(--display);
+  font-size: 1.4rem;
+  margin-top: 3rem;
+}
+
+.workflow p,
+.evidence p {
+  color: var(--muted);
+  line-height: 1.7;
+}
+
+.evidence {
+  align-items: start;
+  display: grid;
+  gap: 2rem;
+  grid-template-columns: auto minmax(0, 1fr) minmax(18rem, 0.5fr);
+  padding: clamp(3rem, 8vw, 7rem) clamp(1rem, 5vw, 6rem);
+}
+
+.evidence h2 {
+  font-family: var(--display);
+  font-size: clamp(2rem, 4vw, 4rem);
+  letter-spacing: -0.06em;
+  margin: 0.5rem 0;
+}
+
+@media (max-width: 800px) {
+  .topbar nav > a:not(:last-child):not(:nth-last-child(2)) {
+    display: none;
+  }
+
+  .hero,
+  .evidence {
+    grid-template-columns: 1fr;
+  }
+
+  .hero {
+    min-height: auto;
+  }
+
+  .workflow > div {
+    grid-template-columns: 1fr 1fr;
+  }
+}
