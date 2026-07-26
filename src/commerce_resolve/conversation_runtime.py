@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import logging
+import time
 from datetime import UTC, datetime
 from typing import Any
 
@@ -18,14 +20,29 @@ from commerce_resolve.conversation_projection import (
 from commerce_resolve.gateways import InterpreterUnavailableError
 from commerce_resolve.l2_memory import open_sqlite_memory_store
 from commerce_resolve.l2_models import L2RuntimeState
+from commerce_resolve.order_context import extract_explicit_order_id
 from commerce_resolve.state import RunContext
+from commerce_resolve.structured_logging import (
+    action_id_var,
+    log_event,
+    run_id_var,
+)
 from commerce_resolve.web.dependencies import RequestAccess, WebServices
+from commerce_resolve.web.errors import llm_quota_exceeded_message
 from commerce_resolve.workflow import build_workflow
 
 STEP_PHASES: dict[str, tuple[str, str]] = {
     "bind_and_interpret": ("understanding", "正在理解你的问题…"),
+    "clarify_intent": ("clarifying_intent", "正在确认你希望处理的售后问题…"),
+    "respond_intent_fallback": ("clarifying_intent", "正在整理可继续的咨询方式…"),
     "query_order": ("loading_order", "正在查询订单信息…"),
     "query_shipment": ("loading_shipment", "正在查询物流进度…"),
+    "prepare_service_guidance": ("planning_service", "正在拆解你的售后目标…"),
+    "load_guidance_order": ("loading_order", "正在核对订单状态…"),
+    "load_guidance_shipment": ("loading_shipment", "正在核对物流进度…"),
+    "retrieve_guidance_policy": ("searching_policy", "正在检索相关售后政策…"),
+    "assess_guidance_evidence": ("checking_evidence", "正在核对组合证据…"),
+    "assemble_service_resolution": ("assembling_service", "正在整理可执行方案…"),
     "prepare_policy_query": ("searching_policy", "正在整理政策检索条件…"),
     "retrieve_policy": ("searching_policy", "正在检索售后政策…"),
     "assess_policy_evidence": ("checking_evidence", "正在核对政策证据…"),
@@ -36,17 +53,18 @@ STEP_PHASES: dict[str, tuple[str, str]] = {
     "revalidate_refund": ("checking_refund", "正在重新核对退款资格…"),
     "execute_refund": ("executing_refund", "正在执行 Mock 退款…"),
     "verify_refund": ("verifying_result", "正在验证 Mock 退款结果…"),
-    "l2_prepare_upgrade": ("preparing_l2", "正在准备 AI 二线客服升级…"),
+    "l2_prepare_upgrade": ("preparing_l2", "正在准备 AI 深度处理…"),
     "l2_cancel_upgrade": ("applying_decision", "正在记录升级决定…"),
-    "l2_create_case": ("creating_case", "正在创建 AI 二线客服 Case…"),
-    "l2_load_context": ("loading_context", "正在加载二线客服上下文…"),
-    "l2_decide": ("l2_processing", "AI 二线客服正在处理…"),
-    "l2_execute_tool": ("l2_tool", "AI 二线客服正在查询受控数据…"),
+    "l2_create_case": ("creating_case", "正在创建 AI 深度处理任务…"),
+    "l2_load_context": ("loading_context", "正在加载深度处理上下文…"),
+    "l2_decide": ("l2_processing", "AI 正在深度处理…"),
+    "l2_execute_tool": ("l2_tool", "AI 深度处理正在查询受控数据…"),
     "l2_bridge_refund": ("checking_refund", "正在核对退款候选…"),
     "l2_record_refund_result": ("verifying_result", "正在记录退款验证结果…"),
     "l2_finalize_resolved": ("finalizing", "正在整理处理结果…"),
     "l2_finalize_stopped": ("finalizing", "正在整理停止原因…"),
 }
+LOGGER = logging.getLogger("commerce_resolve.agent")
 
 
 class RuntimeAccessError(ValueError):
@@ -77,27 +95,57 @@ class ConversationRuntime:
         """在请求响应之后执行一轮 Graph，断开 SSE 不会取消此方法。"""
 
         run = accepted.run
-        with self.services.thread_locks.acquire(run.thread_id) as acquired:
-            if not acquired:
-                self.repository.fail_run(
-                    run_id=run.run_id,
-                    error_code="thread_busy",
-                    assistant_message="当前会话还有请求正在处理，请稍后重试。",
-                )
-                return
-            try:
-                self.repository.mark_run_started(run.run_id)
-                self._execute_graph(access, accepted, message_override=message_override)
-            except InterpreterUnavailableError:
-                self._fail(run.run_id, "llm_temporarily_failed")
-            except RuntimeAccessError as error:
-                self._fail(run.run_id, error.error_code)
-            except ConversationProjectionError:
-                self._fail(run.run_id, "projection_failed")
-            except (LookupError, ValueError):
-                self._fail(run.run_id, "query_rejected")
-            except Exception:
-                self._fail(run.run_id, "run_failed")
+        started = time.monotonic()
+        run_token = run_id_var.set(run.run_id)
+        try:
+            with self.services.thread_locks.acquire(run.thread_id) as acquired:
+                if not acquired:
+                    self.repository.fail_run(
+                        run_id=run.run_id,
+                        error_code="thread_busy",
+                        assistant_message="当前会话还有请求正在处理，请稍后重试。",
+                    )
+                    log_event(
+                        LOGGER,
+                        logging.WARNING,
+                        "agent.run.failed",
+                        result="failed",
+                        error_code="thread_busy",
+                        duration_ms=max(0, int((time.monotonic() - started) * 1000)),
+                    )
+                    return
+                try:
+                    self.repository.mark_run_started(run.run_id)
+                    log_event(
+                        LOGGER,
+                        logging.INFO,
+                        "agent.run.started",
+                        result="running",
+                    )
+                    self._execute_graph(
+                        access,
+                        accepted,
+                        message_override=message_override,
+                    )
+                    log_event(
+                        LOGGER,
+                        logging.INFO,
+                        "agent.run.completed",
+                        result="completed",
+                        duration_ms=max(0, int((time.monotonic() - started) * 1000)),
+                    )
+                except InterpreterUnavailableError:
+                    self._fail(run.run_id, "llm_temporarily_failed")
+                except RuntimeAccessError as error:
+                    self._fail(run.run_id, error.error_code)
+                except ConversationProjectionError:
+                    self._fail(run.run_id, "projection_failed")
+                except (LookupError, ValueError):
+                    self._fail(run.run_id, "query_rejected")
+                except Exception:
+                    self._fail(run.run_id, "run_failed")
+        finally:
+            run_id_var.reset(run_token)
 
     def execute_action_run(
         self,
@@ -108,29 +156,60 @@ class ConversationRuntime:
         """在响应后恢复审批类中断，并把结果写入同一公开 Run。"""
 
         run = accepted.run
-        with self.services.thread_locks.acquire(run.thread_id) as acquired:
-            if not acquired:
-                self.repository.fail_run(
-                    run_id=run.run_id,
-                    error_code="thread_busy",
-                    assistant_message="当前会话还有请求正在处理，请稍后重试。",
-                )
-                return
-            try:
-                self.repository.mark_run_started(run.run_id)
-                self._execute_action_graph(access, accepted, resume_payload)
-            except InterpreterUnavailableError:
-                self._fail(run.run_id, "llm_temporarily_failed")
-            except RuntimeAccessError as error:
-                self._fail(run.run_id, error.error_code)
-            except BusinessDataError as error:
-                self._fail(run.run_id, error.error_code)
-            except ConversationProjectionError:
-                self._fail(run.run_id, "projection_failed")
-            except (LookupError, ValueError):
-                self._fail(run.run_id, "query_rejected")
-            except Exception:
-                self._fail(run.run_id, "run_failed")
+        started = time.monotonic()
+        run_token = run_id_var.set(run.run_id)
+        action_value = resume_payload.get("action_id")
+        action_token = action_id_var.set(
+            action_value if isinstance(action_value, str) else None
+        )
+        try:
+            with self.services.thread_locks.acquire(run.thread_id) as acquired:
+                if not acquired:
+                    self.repository.fail_run(
+                        run_id=run.run_id,
+                        error_code="thread_busy",
+                        assistant_message="当前会话还有请求正在处理，请稍后重试。",
+                    )
+                    log_event(
+                        LOGGER,
+                        logging.WARNING,
+                        "agent.run.failed",
+                        result="failed",
+                        error_code="thread_busy",
+                        duration_ms=max(0, int((time.monotonic() - started) * 1000)),
+                    )
+                    return
+                try:
+                    self.repository.mark_run_started(run.run_id)
+                    log_event(
+                        LOGGER,
+                        logging.INFO,
+                        "agent.run.started",
+                        result="running",
+                    )
+                    self._execute_action_graph(access, accepted, resume_payload)
+                    log_event(
+                        LOGGER,
+                        logging.INFO,
+                        "agent.run.completed",
+                        result="completed",
+                        duration_ms=max(0, int((time.monotonic() - started) * 1000)),
+                    )
+                except InterpreterUnavailableError:
+                    self._fail(run.run_id, "llm_temporarily_failed")
+                except RuntimeAccessError as error:
+                    self._fail(run.run_id, error.error_code)
+                except BusinessDataError as error:
+                    self._fail(run.run_id, error.error_code)
+                except ConversationProjectionError:
+                    self._fail(run.run_id, "projection_failed")
+                except (LookupError, ValueError):
+                    self._fail(run.run_id, "query_rejected")
+                except Exception:
+                    self._fail(run.run_id, "run_failed")
+        finally:
+            action_id_var.reset(action_token)
+            run_id_var.reset(run_token)
 
     def _execute_graph(
         self,
@@ -143,6 +222,22 @@ class ConversationRuntime:
 
         thread_id = accepted.run.thread_id
         input_message = message_override or accepted.message.content
+        conversation = self.services.repository.get_authorized_conversation(
+            thread_id=thread_id,
+            subject_id=access.identity.subject_id,
+            workspace_id=access.principal.workspace_id,
+            access_mode=access.principal.mode,
+        )
+        if conversation is None:
+            raise RuntimeAccessError("conversation_not_accessible")
+        explicit_order_id = extract_explicit_order_id(input_message)
+        if (
+            conversation.related_order_id is not None
+            and explicit_order_id is not None
+            and explicit_order_id != conversation.related_order_id
+        ):
+            self._complete_order_context_mismatch(accepted)
+            return
         config = {"configurable": {"thread_id": thread_id}}
         with open_sqlite_memory_store(self.services.settings.memory_db_path) as store:
             with open_sqlite_checkpointer(
@@ -294,6 +389,7 @@ class ConversationRuntime:
             payload=public_message_payload(response),
             pending_action=response.l2_pending_action,
             checkpoint_id=checkpoint_id,
+            payload_version=2,
         )
 
     def _new_message_dependencies(
@@ -370,6 +466,12 @@ class ConversationRuntime:
     ) -> RunContext:
         """从可信 Session 构造不能由客户端覆盖的 Graph Runtime Context。"""
 
+        conversation = self.services.repository.get_authorized_conversation(
+            thread_id=thread_id,
+            subject_id=access.identity.subject_id,
+            workspace_id=access.principal.workspace_id,
+            access_mode=access.principal.mode,
+        )
         return RunContext(
             user_id=access.principal.actor_id,
             workspace_id=access.principal.workspace_id,
@@ -379,6 +481,21 @@ class ConversationRuntime:
             subject_id=access.identity.subject_id,
             l2_allowed=l2_allowed,
             l2_quota_remaining=l2_quota_remaining,
+            bound_order_id=(
+                conversation.related_order_id if conversation is not None else None
+            ),
+        )
+
+    def _complete_order_context_mismatch(self, accepted: AcceptedRun) -> None:
+        """以普通消息拒绝绑定冲突，且不调用模型、Graph 或业务工具。"""
+
+        message = "当前对话已绑定其他订单，请从目标订单页面重新开始咨询。"
+        self.repository.complete_run(
+            run_id=accepted.run.run_id,
+            assistant_message=message,
+            payload={"public_status": "order_context_mismatch"},
+            pending_action=None,
+            payload_version=2,
         )
 
     def _fail(self, run_id: str, error_code: str) -> None:
@@ -388,7 +505,9 @@ class ConversationRuntime:
             "llm_temporarily_failed": "模型服务暂时不可用，请稍后重试。",
             "llm_not_authorized": "当前账号不能使用模型能力。",
             "llm_not_configured": "模型能力尚未配置，请联系管理员。",
-            "llm_quota_exceeded": "今天的模型调用额度已用完，请稍后再试。",
+            "llm_quota_exceeded": llm_quota_exceeded_message(
+                self.services.settings.llm_daily_call_limit
+            ),
             "query_rejected": (
                 "暂时无法处理这个问题，请换一种方式描述或尝试查询订单、物流及售后政策。"
             ),
@@ -399,4 +518,11 @@ class ConversationRuntime:
             run_id=run_id,
             error_code=error_code,
             assistant_message=messages.get(error_code, "本次处理未能完成，请重试。"),
+        )
+        log_event(
+            LOGGER,
+            logging.ERROR,
+            "agent.run.failed",
+            result="failed",
+            error_code=error_code,
         )

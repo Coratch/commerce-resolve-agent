@@ -209,6 +209,25 @@ def delete_preference(
     return True
 
 
+def clear_preferences(
+    store: BaseStore,
+    *,
+    user_id: str,
+    workspace_id: str,
+) -> int:
+    """删除目标工作区内全部已确认偏好，并返回实际删除数量。"""
+
+    preferences = list_preferences(
+        store,
+        user_id=user_id,
+        workspace_id=workspace_id,
+    )
+    namespace = preference_namespace(user_id=user_id, workspace_id=workspace_id)
+    for preference in preferences:
+        store.delete(namespace, preference.memory_type)
+    return len(preferences)
+
+
 def validate_memory_value(memory_type: MemoryType, value: MemoryValue) -> None:
     """在 Web 更新前验证值属于指定偏好类型，不产生 Store 副作用。"""
 

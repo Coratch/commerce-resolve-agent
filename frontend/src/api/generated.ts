@@ -13,7 +13,7 @@ export interface paths {
         };
         /**
          * Get Session
-         * @description 恢复有效浏览器 Session，或创建独立游客 Session。
+         * @description 恢复有效注册 Session；匿名访问不创建 Cookie 或业务身份。
          */
         get: operations["get_session_api_session_get"];
         put?: never;
@@ -35,7 +35,7 @@ export interface paths {
         put?: never;
         /**
          * Register
-         * @description 验证游客请求并原子消费邀请码创建账号与工作区。
+         * @description 验证同源请求并原子创建账号、工作区与演示数据。
          */
         post: operations["register_api_auth_register_post"];
         delete?: never;
@@ -55,7 +55,7 @@ export interface paths {
         put?: never;
         /**
          * Login
-         * @description 验证账号后撤销游客 Session，并轮换为注册用户 Session。
+         * @description 验证账号后创建或轮换注册用户 Session。
          */
         post: operations["login_api_auth_login_post"];
         delete?: never;
@@ -75,9 +75,233 @@ export interface paths {
         put?: never;
         /**
          * Logout
-         * @description 撤销注册 Session，并为当前浏览器建立全新游客 Session。
+         * @description 撤销注册 Session、删除 Cookie 并返回匿名状态。
          */
         post: operations["logout_api_auth_logout_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/customers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Customers
+         * @description 列出准备演示数据所需的有限注册账号信息。
+         */
+        get: operations["list_customers_api_admin_customers_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/customers/{user_id}/demo-workspace/reset": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reset Customer Demo Workspace
+         * @description 由管理员为明确目标客户执行同等的完整演示工作区重置。
+         */
+        post: operations["reset_customer_demo_workspace_api_admin_customers__user_id__demo_workspace_reset_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/invitations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Invitations
+         * @description 列出不含明文或 Hash 的邀请码使用状态。
+         */
+        get: operations["list_invitations_api_admin_invitations_get"];
+        put?: never;
+        /**
+         * Create Invitation
+         * @description 创建邀请码并只在本次响应中返回明文。
+         */
+        post: operations["create_invitation_api_admin_invitations_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/invitations/{invitation_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Revoke Invitation
+         * @description 幂等撤销邀请码，不在审计或响应中暴露明文。
+         */
+        delete: operations["revoke_invitation_api_admin_invitations__invitation_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/audit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Audit
+         * @description 读取有界后台业务写审计，不读取凭证和客户消息。
+         */
+        get: operations["list_audit_api_admin_audit_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/agent-runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Agent Runs
+         * @description 按有限条件读取真实 Agent Run 元数据，不连接消息正文。
+         */
+        get: operations["list_agent_runs_api_admin_agent_runs_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/agent-runs/{run_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Agent Run
+         * @description 返回白名单 Run 事件和可选 L2 聚合诊断。
+         */
+        get: operations["get_agent_run_api_admin_agent_runs__run_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/eval": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Latest Eval
+         * @description 读取最近 Eval Candidate 和当前 Baseline，不启动 Eval。
+         */
+        get: operations["get_latest_eval_api_admin_eval_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/eval/runs/{run_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Eval Run
+         * @description 读取指定受限 Run ID 的 Eval 摘要，不接受文件路径。
+         */
+        get: operations["get_eval_run_api_admin_eval_runs__run_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/system": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get System
+         * @description 返回版本、迁移、健康、Capability 和存储有限状态。
+         */
+        get: operations["get_system_api_admin_system_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/overview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Overview
+         * @description 组合权威计数、最近 Run、Eval 与系统只读摘要。
+         */
+        get: operations["get_overview_api_admin_overview_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -93,13 +317,13 @@ export interface paths {
         };
         /**
          * List Conversations
-         * @description 列出当前账号或游客 Session 自己的活动/归档会话。
+         * @description 列出当前注册账号自己的活动或归档会话。
          */
         get: operations["list_conversations_api_conversations_get"];
         put?: never;
         /**
          * Create Conversation
-         * @description 为当前服务端 Principal 创建并持久绑定随机 thread。
+         * @description 验证本人订单后恢复或创建该订单唯一活动 Thread。
          */
         post: operations["create_conversation_api_conversations_post"];
         delete?: never;
@@ -444,7 +668,7 @@ export interface paths {
         patch: operations["update_memory_api_memories__memory_id__patch"];
         trace?: never;
     };
-    "/api/orders": {
+    "/api/support/overview": {
         parameters: {
             query?: never;
             header?: never;
@@ -452,23 +676,119 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * List Orders
-         * @description 列出当前注册用户私有工作区中的订单与物流。
+         * Get Support Overview
+         * @description 返回注册客户售后首页；读取不会创建会话或调用模型。
          */
-        get: operations["list_orders_api_orders_get"];
+        get: operations["get_support_overview_api_support_overview_get"];
         put?: never;
-        /**
-         * Create Order
-         * @description 在当前注册用户私有工作区创建订单及可选物流。
-         */
-        post: operations["create_order_api_orders_post"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/orders/{order_id}": {
+    "/api/support/orders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Support Orders
+         * @description 按搜索词和客户状态分页列出当前身份的订单。
+         */
+        get: operations["list_support_orders_api_support_orders_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/support/orders/{order_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Support Order
+         * @description 返回当前身份有权访问的订单详情，越权与不存在统一为 404。
+         */
+        get: operations["get_support_order_api_support_orders__order_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/support/services": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Support Services
+         * @description 分页列出当前注册客户的退款与 AI 深度处理服务投影。
+         */
+        get: operations["list_support_services_api_support_services_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/support/services/{service_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Support Service
+         * @description 返回本人单条服务详情；越权与不存在使用统一语义。
+         */
+        get: operations["get_support_service_api_support_services__service_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/demo-workspace": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Demo Workspace
+         * @description 返回当前注册客户的演示数据版本和初始化状态。
+         */
+        get: operations["get_demo_workspace_api_demo_workspace_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/demo-workspace/reset": {
         parameters: {
             query?: never;
             header?: never;
@@ -477,55 +797,11 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        post?: never;
         /**
-         * Delete Order
-         * @description 删除当前工作区指定订单及其物流，并统一越权错误。
+         * Reset Demo Workspace
+         * @description 经显式确认重置本人完整演示工作区，不接受局部事实参数。
          */
-        delete: operations["delete_order_api_orders__order_id__delete"];
-        options?: never;
-        head?: never;
-        /**
-         * Update Order
-         * @description 更新当前工作区指定订单与一对一物流记录。
-         */
-        patch: operations["update_order_api_orders__order_id__patch"];
-        trace?: never;
-    };
-    "/api/orders/{order_id}/payment": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /**
-         * Upsert Payment
-         * @description 为当前注册用户订单创建或更新退款前 Mock 支付事实。
-         */
-        put: operations["upsert_payment_api_orders__order_id__payment_put"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/orders/{order_id}/refunds": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List Refunds
-         * @description 列出当前注册用户指定私有订单的全部 Mock 退款结果。
-         */
-        get: operations["list_refunds_api_orders__order_id__refunds_get"];
-        put?: never;
-        post?: never;
+        post: operations["reset_demo_workspace_api_demo_workspace_reset_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -536,6 +812,298 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /**
+         * AdminAuditRecord
+         * @description 表示可向管理员公开的脱敏后台写操作记录。
+         */
+        AdminAuditRecord: {
+            /** Audit Id */
+            audit_id: string;
+            /** Admin User Id */
+            admin_user_id: string;
+            /** Target User Id */
+            target_user_id?: string | null;
+            /** Action */
+            action: string;
+            /** Resource Type */
+            resource_type: string;
+            /** Resource Id */
+            resource_id?: string | null;
+            /**
+             * Result
+             * @enum {string}
+             */
+            result: "succeeded" | "failed";
+            /** Parameter Summary */
+            parameter_summary: {
+                [key: string]: unknown;
+            };
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /**
+         * AdminCustomer
+         * @description 表示后台准备 Mock 数据所需的有限客户身份。
+         */
+        AdminCustomer: {
+            /** User Id */
+            user_id: string;
+            /** Username */
+            username: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "active" | "disabled";
+            /**
+             * Role
+             * @enum {string}
+             */
+            role: "customer" | "admin";
+            /** Workspace Id */
+            workspace_id: string;
+            /** Dataset Version */
+            dataset_version?: string | null;
+            /** Dataset Status */
+            dataset_status: ("initializing" | "ready" | "resetting" | "failed") | null;
+            /** Reset Generation */
+            reset_generation: number;
+            /** Order Count */
+            order_count: number;
+            /** Initialized At */
+            initialized_at?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /**
+         * AdminEvalSnapshot
+         * @description 表示 Baseline 与最近 Candidate 的只读兼容性摘要。
+         */
+        AdminEvalSnapshot: {
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "missing" | "incompatible" | "failed" | "passed";
+            /** Baseline Id */
+            baseline_id?: string | null;
+            /** Candidate Run Id */
+            candidate_run_id?: string | null;
+            /** Candidate Status */
+            candidate_status?: string | null;
+            /** Application Version */
+            application_version?: string | null;
+            /** Profile Version */
+            profile_version?: string | null;
+            /** Completed At */
+            completed_at?: string | null;
+            /**
+             * Safety Violation Count
+             * @default 0
+             */
+            safety_violation_count: number;
+            /**
+             * Compatibility Reasons
+             * @default []
+             */
+            compatibility_reasons: string[];
+            /**
+             * Suites
+             * @default []
+             */
+            suites: components["schemas"]["AdminEvalSuite"][];
+        };
+        /**
+         * AdminEvalSuite
+         * @description 表示一个 Eval Suite 的通过数量和安全违规数量。
+         */
+        AdminEvalSuite: {
+            /** Suite Id */
+            suite_id: string;
+            /** Suite Version */
+            suite_version: string;
+            /** Passed Scenarios */
+            passed_scenarios: number;
+            /** Total Scenarios */
+            total_scenarios: number;
+            /** Passed */
+            passed: boolean;
+            /** Safety Violation Count */
+            safety_violation_count: number;
+        };
+        /**
+         * AdminInvitation
+         * @description 表示不含邀请码明文和摘要的邀请使用状态。
+         */
+        AdminInvitation: {
+            /** Invitation Id */
+            invitation_id: string;
+            /**
+             * Expires At
+             * Format: date-time
+             */
+            expires_at: string;
+            /** Max Uses */
+            max_uses: number;
+            /** Used Count */
+            used_count: number;
+            /** Revoked */
+            revoked: boolean;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /**
+         * AdminInvitationCreateRequest
+         * @description 接收后台创建邀请码的有限有效期和使用次数。
+         */
+        AdminInvitationCreateRequest: {
+            /**
+             * Expires In Hours
+             * @default 168
+             */
+            expires_in_hours: number;
+            /**
+             * Max Uses
+             * @default 1
+             */
+            max_uses: number;
+        };
+        /**
+         * AdminOverview
+         * @description 组合后台首页的权威计数、最近 Run、Eval 与系统状态。
+         */
+        AdminOverview: {
+            /** Counts */
+            counts: {
+                [key: string]: number;
+            };
+            /** Recent Runs */
+            recent_runs: components["schemas"]["AdminRunSummary"][];
+            evaluation: components["schemas"]["AdminEvalSnapshot"];
+            system: components["schemas"]["AdminSystemSnapshot"];
+        };
+        /**
+         * AdminRunDetail
+         * @description 组合 Run 摘要、脱敏事件和可选 L2 诊断。
+         */
+        AdminRunDetail: {
+            run: components["schemas"]["AdminRunSummary"];
+            /** Events */
+            events: components["schemas"]["AdminRunEvent"][];
+            diagnostics?: components["schemas"]["AdminRunDiagnostics"] | null;
+        };
+        /**
+         * AdminRunDiagnostics
+         * @description 表示可用 L2 Case 的有限工具、预算和失败诊断。
+         */
+        AdminRunDiagnostics: {
+            /** Case Id */
+            case_id: string;
+            /** Status */
+            status: string;
+            /** Steps Used */
+            steps_used: number;
+            /** Model Calls Used */
+            model_calls_used: number;
+            /** Tool Calls Used */
+            tool_calls_used: number;
+            /** Estimated Tokens Used */
+            estimated_tokens_used: number;
+            /** Active Milliseconds */
+            active_milliseconds: number;
+            /** Stop Reason */
+            stop_reason?: string | null;
+            /** Failure Attribution */
+            failure_attribution?: string | null;
+            /**
+             * Tool Categories
+             * @default []
+             */
+            tool_categories: string[];
+        };
+        /**
+         * AdminRunEvent
+         * @description 表示经过字段白名单投影的 Agent Run 事件。
+         */
+        AdminRunEvent: {
+            /** Event Id */
+            event_id: number;
+            /** Event Type */
+            event_type: string;
+            /** Phase */
+            phase?: string | null;
+            /** Pending Action */
+            pending_action?: string | null;
+            /** Error Code */
+            error_code?: string | null;
+            /** Retryable */
+            retryable?: boolean | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /**
+         * AdminRunSummary
+         * @description 表示不含客户正文的一次 Agent Run 运营摘要。
+         */
+        AdminRunSummary: {
+            /** Run Id */
+            run_id: string;
+            /** Request Kind */
+            request_kind: string;
+            /** Status */
+            status: string;
+            /** Pending Action */
+            pending_action?: string | null;
+            /** Public Error Code */
+            public_error_code?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Started At */
+            started_at?: string | null;
+            /** Completed At */
+            completed_at?: string | null;
+            /** Duration Ms */
+            duration_ms?: number | null;
+        };
+        /**
+         * AdminSystemSnapshot
+         * @description 表示不含本地路径和配置值的有限运行状态。
+         */
+        AdminSystemSnapshot: {
+            /** Version */
+            version: string;
+            /** Migration Head */
+            migration_head: string;
+            /** Live */
+            live: boolean;
+            /** Ready */
+            ready: boolean;
+            /** Ready Error Code */
+            ready_error_code?: string | null;
+            /** Capabilities */
+            capabilities: {
+                [key: string]: string;
+            };
+            /** Storage */
+            storage: {
+                [key: string]: "available" | "unavailable";
+            };
+        };
         /**
          * AgentRunResponse
          * @description 返回授权会话中的当前 Run 状态。
@@ -591,6 +1159,15 @@ export interface components {
              */
             l2_trace_events: components["schemas"]["PublicL2TraceEvent"][];
             memory_proposal?: components["schemas"]["PublicMemoryProposal"] | null;
+            service_resolution?: components["schemas"]["ServiceResolution"] | null;
+        };
+        /**
+         * ConversationCreateRequest
+         * @description 接收必填订单绑定，不接受客户端身份或工作区字段。
+         */
+        ConversationCreateRequest: {
+            /** Related Order Id */
+            related_order_id: string;
         };
         /**
          * ConversationDetailResponse
@@ -687,11 +1264,15 @@ export interface components {
         };
         /**
          * ConversationResponse
-         * @description 返回当前身份新建的随机 conversation thread。
+         * @description 返回当前订单活动 conversation，并标明是否本次新建。
          */
         ConversationResponse: {
             /** Thread Id */
             thread_id: string;
+            /** Related Order Id */
+            related_order_id: string;
+            /** Created */
+            created: boolean;
         };
         /**
          * ConversationSummary
@@ -700,6 +1281,8 @@ export interface components {
         ConversationSummary: {
             /** Thread Id */
             thread_id: string;
+            /** Related Order Id */
+            related_order_id?: string | null;
             /** Title */
             title: string;
             /**
@@ -741,10 +1324,47 @@ export interface components {
             /** Deleted */
             deleted: boolean;
         };
+        /**
+         * DemoWorkspaceStatus
+         * @description 表示当前用户演示工作区的有限公开状态。
+         */
+        DemoWorkspaceStatus: {
+            /** Workspace Id */
+            workspace_id: string;
+            /** Owner User Id */
+            owner_user_id: string;
+            /** Dataset Version */
+            dataset_version?: string | null;
+            /** Dataset Status */
+            dataset_status: ("initializing" | "ready" | "resetting" | "failed") | null;
+            /** Reset Generation */
+            reset_generation: number;
+            /** Order Count */
+            order_count: number;
+            /** Initialized At */
+            initialized_at?: string | null;
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
+        };
+        /**
+         * InvitationIssued
+         * @description 返回邀请码创建时唯一可见的明文及元数据。
+         */
+        InvitationIssued: {
+            /** Id */
+            id: string;
+            /** Code */
+            code: string;
+            /**
+             * Expires At
+             * Format: date-time
+             */
+            expires_at: string;
+            /** Max Uses */
+            max_uses: number;
         };
         /**
          * L2CasesResponse
@@ -846,66 +1466,6 @@ export interface components {
              * @enum {string}
              */
             value: "zh-CN" | "en" | "concise" | "standard" | "detailed" | "neutral" | "friendly";
-        };
-        /**
-         * MockPaymentInput
-         * @description 校验注册用户为演示订单维护的退款前 Mock 支付事实。
-         */
-        MockPaymentInput: {
-            /** Amount */
-            amount: string;
-            /**
-             * Currency
-             * @default CNY
-             * @constant
-             */
-            currency: "CNY";
-            /**
-             * Channel
-             * @enum {string}
-             */
-            channel: "mock_card" | "mock_wallet";
-            /**
-             * Status
-             * @enum {string}
-             */
-            status: "pending" | "settled" | "failed";
-        };
-        /**
-         * OrderCreate
-         * @description 校验私有工作区中新建订单及可选物流。
-         */
-        OrderCreate: {
-            /** Order Id */
-            order_id: string;
-            /**
-             * Status
-             * @enum {string}
-             */
-            status: "processing" | "shipped" | "delivered" | "cancelled";
-            shipment?: components["schemas"]["ShipmentInput"] | null;
-        };
-        /**
-         * OrderUpdate
-         * @description 校验订单与物流的部分更新，至少要求一个字段。
-         */
-        OrderUpdate: {
-            /** Status */
-            status?: ("processing" | "shipped" | "delivered" | "cancelled") | null;
-            shipment?: components["schemas"]["ShipmentInput"] | null;
-            /**
-             * Remove Shipment
-             * @default false
-             */
-            remove_shipment: boolean;
-        };
-        /**
-         * OrdersResponse
-         * @description 返回当前私有工作区订单列表。
-         */
-        OrdersResponse: {
-            /** Orders */
-            orders: components["schemas"]["PublicOrder"][];
         };
         /**
          * PendingL2Response
@@ -1201,10 +1761,10 @@ export interface components {
             reads_confirmed_preferences: boolean;
             /**
              * Agent Identity
-             * @default AI 二线客服，并非真人
+             * @default AI 深度处理助手，并非真人
              * @constant
              */
-            agent_identity: "AI 二线客服，并非真人";
+            agent_identity: "AI 深度处理助手，并非真人";
         };
         /**
          * PublicMemoryProposal
@@ -1219,110 +1779,6 @@ export interface components {
             value: string;
             /** Purpose */
             purpose: string;
-        };
-        /**
-         * PublicOrder
-         * @description 向浏览器返回当前账号有权查看的订单、物流和 Mock 交易摘要。
-         */
-        PublicOrder: {
-            /** Order Id */
-            order_id: string;
-            /**
-             * Status
-             * @enum {string}
-             */
-            status: "processing" | "shipped" | "delivered" | "cancelled";
-            shipment?: components["schemas"]["PublicShipment"] | null;
-            payment?: components["schemas"]["PublicPayment"] | null;
-            /**
-             * Refunds
-             * @default []
-             */
-            refunds: components["schemas"]["PublicRefund"][];
-            /**
-             * Created At
-             * Format: date-time
-             */
-            created_at: string;
-            /**
-             * Updated At
-             * Format: date-time
-             */
-            updated_at: string;
-        };
-        /**
-         * PublicPayment
-         * @description 向浏览器返回可展示但不可作为退款执行参数的 Mock 支付事实。
-         */
-        PublicPayment: {
-            /** Payment Id */
-            payment_id: string;
-            /** Amount */
-            amount: string;
-            /**
-             * Currency
-             * @constant
-             */
-            currency: "CNY";
-            /**
-             * Channel
-             * @enum {string}
-             */
-            channel: "mock_card" | "mock_wallet";
-            /**
-             * Status
-             * @enum {string}
-             */
-            status: "pending" | "settled" | "failed" | "refunded";
-            /**
-             * Created At
-             * Format: date-time
-             */
-            created_at: string;
-            /**
-             * Updated At
-             * Format: date-time
-             */
-            updated_at: string;
-        };
-        /**
-         * PublicRefund
-         * @description 向浏览器返回已持久化 Mock 退款的只读验证摘要。
-         */
-        PublicRefund: {
-            /** Refund Id */
-            refund_id: string;
-            /** Action Id */
-            action_id: string;
-            /** Amount */
-            amount: string;
-            /**
-             * Currency
-             * @constant
-             */
-            currency: "CNY";
-            /**
-             * Channel
-             * @enum {string}
-             */
-            channel: "mock_card" | "mock_wallet";
-            /**
-             * Status
-             * @enum {string}
-             */
-            status: "processing" | "succeeded" | "failed" | "unknown";
-            /** Result Code */
-            result_code: string;
-            /**
-             * Created At
-             * Format: date-time
-             */
-            created_at: string;
-            /**
-             * Updated At
-             * Format: date-time
-             */
-            updated_at: string;
         };
         /**
          * PublicRefundPreview
@@ -1388,19 +1844,21 @@ export interface components {
             result_code: string;
         };
         /**
-         * PublicShipment
-         * @description 向浏览器返回不含内部主键和工作区信息的物流数据。
+         * PublicServiceStep
+         * @description 表示服务详情时间线中不含内部节点的一步。
          */
-        PublicShipment: {
+        PublicServiceStep: {
+            /** Key */
+            key: string;
+            /** Title */
+            title: string;
             /**
-             * Status
+             * State
              * @enum {string}
              */
-            status: "preparing" | "in_transit" | "delivered";
-            /** Last Event */
-            last_event: string;
-            /** Estimated Delivery At */
-            estimated_delivery_at?: string | null;
+            state: "completed" | "current" | "upcoming";
+            /** Occurred At */
+            occurred_at?: string | null;
         };
         /**
          * RefundApprovalRequest
@@ -1414,14 +1872,6 @@ export interface components {
              * @enum {string}
              */
             decision: "approve" | "reject";
-        };
-        /**
-         * RefundsResponse
-         * @description 返回指定私有订单的全部 Mock 退款只读摘要。
-         */
-        RefundsResponse: {
-            /** Refunds */
-            refunds: components["schemas"]["PublicRefund"][];
         };
         /**
          * RegisterRequest
@@ -1468,6 +1918,135 @@ export interface components {
             reused: boolean;
         };
         /**
+         * ServiceProgressStep
+         * @description 表示组合咨询中可公开的一步处理结果。
+         */
+        ServiceProgressStep: {
+            /** Key */
+            key: string;
+            /** Title */
+            title: string;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "completed" | "blocked" | "skipped";
+        };
+        /**
+         * ServiceRecordDetail
+         * @description 表示服务详情、公开步骤、结果和有限政策依据。
+         */
+        ServiceRecordDetail: {
+            summary: components["schemas"]["ServiceRecordSummary"];
+            /** Public Steps */
+            public_steps: components["schemas"]["PublicServiceStep"][];
+            /** Result Summary */
+            result_summary?: string | null;
+            /**
+             * Citations
+             * @default []
+             */
+            citations: components["schemas"]["SupportCitation"][];
+        };
+        /**
+         * ServiceRecordSummary
+         * @description 表示客户服务进度列表中的稳定只读摘要。
+         */
+        ServiceRecordSummary: {
+            /** Service Id */
+            service_id: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "refund" | "l2_support";
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "waiting_user" | "in_progress" | "completed" | "needs_attention" | "cancelled";
+            /** Order Id */
+            order_id?: string | null;
+            /** Thread Id */
+            thread_id: string;
+            /** Title */
+            title: string;
+            /** Next Action */
+            next_action?: string | null;
+            product_preview?: components["schemas"]["SupportProductPreview"] | null;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /**
+         * ServiceResolution
+         * @description 保存可持久化、可恢复且不含隐藏推理的客户服务方案。
+         */
+        ServiceResolution: {
+            /**
+             * Schema Version
+             * @default 1
+             * @constant
+             */
+            schema_version: 1;
+            /** Goal */
+            goal: string;
+            /**
+             * Verified Facts
+             * @default []
+             */
+            verified_facts: components["schemas"]["ServiceVerifiedFact"][];
+            /**
+             * Missing Information
+             * @default []
+             */
+            missing_information: string[];
+            /**
+             * Policy Evidence
+             * @default []
+             */
+            policy_evidence: components["schemas"]["PolicyCitation"][];
+            /**
+             * Recommendations
+             * @default []
+             */
+            recommendations: string[];
+            /**
+             * Allowed Actions
+             * @default []
+             */
+            allowed_actions: ("view_order" | "view_policy" | "request_refund" | "upgrade_l2" | "provide_information")[];
+            /**
+             * Progress
+             * @default []
+             */
+            progress: components["schemas"]["ServiceProgressStep"][];
+            /**
+             * Stop Reason
+             * @enum {string}
+             */
+            stop_reason: "completed" | "needs_user_input" | "insufficient_evidence" | "conflicting_evidence" | "order_unavailable" | "tool_failed" | "model_unavailable";
+            /** Next Step */
+            next_step: string;
+        };
+        /**
+         * ServiceVerifiedFact
+         * @description 表示一条来自订单、物流或政策证据的已验证事实。
+         */
+        ServiceVerifiedFact: {
+            /**
+             * Category
+             * @enum {string}
+             */
+            category: "order" | "shipment" | "policy";
+            /** Statement */
+            statement: string;
+            /** Evidence Id */
+            evidence_id: string;
+        };
+        /**
          * SessionCapabilities
          * @description 向前端公开当前模式下可展示的确定性能力。
          */
@@ -1478,38 +2057,284 @@ export interface components {
             can_manage_refunds: boolean;
             /** Can Use Llm */
             can_use_llm: boolean;
+            /** Can Access Admin */
+            can_access_admin: boolean;
         };
         /**
          * SessionResponse
-         * @description 返回浏览器当前访问模式和内存态 CSRF Token。
+         * @description 返回浏览器当前认证状态和注册 Session 的有限能力。
          */
         SessionResponse: {
             /**
              * Mode
              * @enum {string}
              */
-            mode: "guest" | "registered";
+            mode: "anonymous" | "registered";
             /** Username */
             username?: string | null;
+            /** Role */
+            role?: ("customer" | "admin") | null;
             /**
              * Session Scope
              * @enum {string}
              */
-            session_scope: "browser" | "account";
+            session_scope: "none" | "account";
             /** Csrf Token */
-            csrf_token: string;
-            /**
-             * Expires At
-             * Format: date-time
-             */
-            expires_at: string;
+            csrf_token?: string | null;
+            /** Expires At */
+            expires_at?: string | null;
             capabilities: components["schemas"]["SessionCapabilities"];
         };
         /**
-         * ShipmentInput
-         * @description 校验创建或更新物流记录所需字段。
+         * SupportAmountSummary
+         * @description 汇总商品展示金额与权威支付退款金额，并保持来源边界。
          */
-        ShipmentInput: {
+        SupportAmountSummary: {
+            /** Item Subtotal */
+            item_subtotal?: string | null;
+            /** Paid Amount */
+            paid_amount?: string | null;
+            /** Refunded Amount */
+            refunded_amount?: string | null;
+            /**
+             * Currency
+             * @default CNY
+             * @constant
+             */
+            currency: "CNY";
+        };
+        /**
+         * SupportCitation
+         * @description 表示客户可定位但不暴露内部检索轨迹的政策依据。
+         */
+        SupportCitation: {
+            /** Source */
+            source: string;
+            /** Version */
+            version: string;
+            /** Locator */
+            locator: string;
+        };
+        /**
+         * SupportOrderDetail
+         * @description 表示订单详情页所需的全部客户公开事实。
+         */
+        SupportOrderDetail: {
+            summary: components["schemas"]["SupportOrderSummary"];
+            /**
+             * Items
+             * @default []
+             */
+            items: components["schemas"]["SupportOrderItem"][];
+            shipment?: components["schemas"]["SupportShipment"] | null;
+            /**
+             * Packages
+             * @default []
+             */
+            packages: components["schemas"]["SupportShipmentPackage"][];
+            /**
+             * Shipment Milestones
+             * @default []
+             */
+            shipment_milestones: components["schemas"]["SupportShipmentMilestone"][];
+            payment?: components["schemas"]["SupportPayment"] | null;
+            /**
+             * Refunds
+             * @default []
+             */
+            refunds: components["schemas"]["SupportRefund"][];
+            amount_summary?: components["schemas"]["SupportAmountSummary"] | null;
+            /** Next Step */
+            next_step?: string | null;
+            /** Available Actions */
+            available_actions: ("ask_assistant" | "view_policy" | "request_refund")[];
+        };
+        /**
+         * SupportOrderItem
+         * @description 表示客户订单详情中的一条下单时商品快照。
+         */
+        SupportOrderItem: {
+            /** Sku */
+            sku: string;
+            /** Title */
+            title: string;
+            /** Quantity */
+            quantity: number;
+            /**
+             * Product Category
+             * @enum {string}
+             */
+            product_category: "general" | "apparel" | "hygiene" | "digital";
+            /** Product Ref */
+            product_ref?: string | null;
+            /** Variant Title */
+            variant_title?: string | null;
+            /** Unit Amount */
+            unit_amount?: string | null;
+            /** Currency */
+            currency?: "CNY" | null;
+            /** Image Url */
+            image_url?: string | null;
+            /** Image Alt */
+            image_alt?: string | null;
+            /**
+             * Snapshot State
+             * @default legacy
+             * @enum {string}
+             */
+            snapshot_state: "complete" | "partial" | "legacy";
+        };
+        /**
+         * SupportOrderSummary
+         * @description 表示售后首页和订单列表使用的客户订单摘要。
+         */
+        SupportOrderSummary: {
+            /** Order Id */
+            order_id: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "processing" | "shipped" | "delivered" | "cancelled";
+            /** Item Count */
+            item_count: number;
+            /** Item Title Preview */
+            item_title_preview?: string | null;
+            /**
+             * Preview Items
+             * @default []
+             */
+            preview_items: components["schemas"]["SupportProductPreview"][];
+            /** Shipment Status */
+            shipment_status?: ("preparing" | "in_transit" | "delivered") | null;
+            /** Fulfillment Summary */
+            fulfillment_summary?: string | null;
+            /** Customer Stage */
+            customer_stage?: string | null;
+            /** Estimated Delivery At */
+            estimated_delivery_at?: string | null;
+            /** Payment Amount */
+            payment_amount?: string | null;
+            /** Latest Service Status */
+            latest_service_status?: ("waiting_user" | "in_progress" | "completed" | "needs_attention" | "cancelled") | null;
+            /** Latest Service Summary */
+            latest_service_summary?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /**
+         * SupportOrdersPage
+         * @description 表示使用稳定游标分页的客户订单列表。
+         */
+        SupportOrdersPage: {
+            /** Orders */
+            orders: components["schemas"]["SupportOrderSummary"][];
+            /** Next Cursor */
+            next_cursor?: string | null;
+        };
+        /**
+         * SupportOverview
+         * @description 表示售后首页的进行中服务和最近订单。
+         */
+        SupportOverview: {
+            /** Active Services */
+            active_services: components["schemas"]["ServiceRecordSummary"][];
+            /** Recent Orders */
+            recent_orders: components["schemas"]["SupportOrderSummary"][];
+            /** Has More Orders */
+            has_more_orders: boolean;
+            /** Has More Services */
+            has_more_services: boolean;
+        };
+        /**
+         * SupportPayment
+         * @description 表示订单详情中的有限 Mock 支付摘要。
+         */
+        SupportPayment: {
+            /** Amount */
+            amount: string;
+            /**
+             * Currency
+             * @constant
+             */
+            currency: "CNY";
+            /**
+             * Channel
+             * @enum {string}
+             */
+            channel: "mock_card" | "mock_wallet";
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "pending" | "settled" | "failed" | "refunded";
+        };
+        /**
+         * SupportProductPreview
+         * @description 表示首页和列表使用的有限商品预览。
+         */
+        SupportProductPreview: {
+            /** Sku */
+            sku: string;
+            /** Title */
+            title: string;
+            /** Variant Title */
+            variant_title?: string | null;
+            /** Quantity */
+            quantity: number;
+            /** Image Url */
+            image_url?: string | null;
+            /** Image Alt */
+            image_alt: string;
+        };
+        /**
+         * SupportRefund
+         * @description 表示订单详情中的有限 Mock 退款结果。
+         */
+        SupportRefund: {
+            /** Refund Id */
+            refund_id: string;
+            /** Amount */
+            amount: string;
+            /**
+             * Currency
+             * @constant
+             */
+            currency: "CNY";
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "processing" | "succeeded" | "failed" | "unknown";
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /**
+         * SupportServicesPage
+         * @description 表示使用稳定游标分页的客户服务列表。
+         */
+        SupportServicesPage: {
+            /** Services */
+            services: components["schemas"]["ServiceRecordSummary"][];
+            /** Next Cursor */
+            next_cursor?: string | null;
+        };
+        /**
+         * SupportShipment
+         * @description 表示客户可见的当前物流事实。
+         */
+        SupportShipment: {
             /**
              * Status
              * @enum {string}
@@ -1519,6 +2344,73 @@ export interface components {
             last_event: string;
             /** Estimated Delivery At */
             estimated_delivery_at?: string | null;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /**
+         * SupportShipmentMilestone
+         * @description 表示由当前物流事实确定性投影的一步进度。
+         */
+        SupportShipmentMilestone: {
+            /**
+             * Key
+             * @enum {string}
+             */
+            key: "preparing" | "in_transit" | "delivered";
+            /** Title */
+            title: string;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "completed" | "current" | "upcoming";
+            /** Detail */
+            detail?: string | null;
+            /** Occurred At */
+            occurred_at?: string | null;
+        };
+        /**
+         * SupportShipmentPackage
+         * @description 表示订单详情中的一个独立履约包裹。
+         */
+        SupportShipmentPackage: {
+            /** Package Id */
+            package_id: string;
+            /** Carrier */
+            carrier?: string | null;
+            /** Tracking Number */
+            tracking_number?: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "preparing" | "in_transit" | "delivered";
+            /** Last Event */
+            last_event: string;
+            /** Estimated Delivery At */
+            estimated_delivery_at?: string | null;
+            /** Items */
+            items: components["schemas"]["SupportShipmentPackageItem"][];
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /**
+         * SupportShipmentPackageItem
+         * @description 表示包裹内一条客户可识别的商品。
+         */
+        SupportShipmentPackageItem: {
+            /** Sku */
+            sku: string;
+            /** Title */
+            title: string;
+            /** Quantity */
+            quantity: number;
         };
         /** ValidationError */
         ValidationError: {
@@ -1532,6 +2424,52 @@ export interface components {
             input?: unknown;
             /** Context */
             ctx?: Record<string, never>;
+        };
+        /**
+         * WorkspaceResetRequest
+         * @description 接收稳定请求标识和不可含糊的完整重置确认。
+         */
+        WorkspaceResetRequest: {
+            /** Client Request Id */
+            client_request_id: string;
+            /**
+             * Confirmation
+             * @constant
+             */
+            confirmation: "RESET";
+        };
+        /**
+         * WorkspaceResetResult
+         * @description 返回成功重置后的版本、代数和公开订单号。
+         */
+        WorkspaceResetResult: {
+            /** Workspace Id */
+            workspace_id: string;
+            /**
+             * Dataset Version
+             * @constant
+             */
+            dataset_version: "portfolio-demo-v1";
+            /**
+             * Dataset Status
+             * @default ready
+             * @constant
+             */
+            dataset_status: "ready";
+            /** Reset Generation */
+            reset_generation: number;
+            /** Order Ids */
+            order_ids: string[];
+            /**
+             * Completed At
+             * Format: date-time
+             */
+            completed_at: string;
+            /**
+             * Already Completed
+             * @default false
+             */
+            already_completed: boolean;
         };
     };
     responses: never;
@@ -1648,6 +2586,332 @@ export interface operations {
             };
         };
     };
+    list_customers_api_admin_customers_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminCustomer"][];
+                };
+            };
+        };
+    };
+    reset_customer_demo_workspace_api_admin_customers__user_id__demo_workspace_reset_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkspaceResetRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceResetResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_invitations_api_admin_invitations_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminInvitation"][];
+                };
+            };
+        };
+    };
+    create_invitation_api_admin_invitations_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminInvitationCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvitationIssued"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    revoke_invitation_api_admin_invitations__invitation_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                invitation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeleteResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_audit_api_admin_audit_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminAuditRecord"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_agent_runs_api_admin_agent_runs_get: {
+        parameters: {
+            query?: {
+                status?: string | null;
+                request_kind?: string | null;
+                started_after?: string | null;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminRunSummary"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_agent_run_api_admin_agent_runs__run_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminRunDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_latest_eval_api_admin_eval_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminEvalSnapshot"];
+                };
+            };
+        };
+    };
+    get_eval_run_api_admin_eval_runs__run_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminEvalSnapshot"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_system_api_admin_system_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminSystemSnapshot"];
+                };
+            };
+        };
+    };
+    get_overview_api_admin_overview_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminOverview"];
+                };
+            };
+        };
+    };
     list_conversations_api_conversations_get: {
         parameters: {
             query?: {
@@ -1688,7 +2952,11 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConversationCreateRequest"];
+            };
+        };
         responses: {
             /** @description Successful Response */
             201: {
@@ -1697,6 +2965,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ConversationResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -2350,7 +3627,7 @@ export interface operations {
             };
         };
     };
-    list_orders_api_orders_get: {
+    get_support_overview_api_support_overview_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -2365,12 +3642,161 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["OrdersResponse"];
+                    "application/json": components["schemas"]["SupportOverview"];
                 };
             };
         };
     };
-    create_order_api_orders_post: {
+    list_support_orders_api_support_orders_get: {
+        parameters: {
+            query?: {
+                q?: string | null;
+                view?: "all" | "processing" | "shipping" | "delivered" | "after_sales";
+                limit?: number;
+                cursor?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupportOrdersPage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_support_order_api_support_orders__order_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                order_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupportOrderDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_support_services_api_support_services_get: {
+        parameters: {
+            query?: {
+                view?: "active" | "history";
+                limit?: number;
+                cursor?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupportServicesPage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_support_service_api_support_services__service_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                service_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ServiceRecordDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_demo_workspace_api_demo_workspace_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DemoWorkspaceStatus"];
+                };
+            };
+        };
+    };
+    reset_demo_workspace_api_demo_workspace_reset_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -2379,73 +3805,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["OrderCreate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PublicOrder"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    delete_order_api_orders__order_id__delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                order_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DeleteResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    update_order_api_orders__order_id__patch: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                order_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["OrderUpdate"];
+                "application/json": components["schemas"]["WorkspaceResetRequest"];
             };
         };
         responses: {
@@ -2455,73 +3815,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PublicOrder"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    upsert_payment_api_orders__order_id__payment_put: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                order_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["MockPaymentInput"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PublicPayment"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_refunds_api_orders__order_id__refunds_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                order_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RefundsResponse"];
+                    "application/json": components["schemas"]["WorkspaceResetResult"];
                 };
             };
             /** @description Validation Error */

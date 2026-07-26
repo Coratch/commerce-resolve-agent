@@ -1,12 +1,18 @@
-"""提供发布门禁使用的迁移、OpenAPI 和敏感产物确定性检查。"""
+"""提供发布门禁使用的部署、迁移、OpenAPI 和敏感产物检查。"""
 
 from __future__ import annotations
 
 import argparse
+import json
+import os
 import re
+import shutil
 import subprocess
+import tomllib
 from pathlib import Path
 from tempfile import TemporaryDirectory
+
+import yaml
 
 from commerce_resolve.adapters.sqlite_business import (
     assert_business_schema_current,
@@ -29,13 +35,88 @@ def check_empty_database_migration() -> None:
             engine.dispose()
 
 
-def check_v07_migration_head(project_root: Path) -> None:
-    """确认 v0.8 未偷偷新增业务迁移，当前 Head 仍是已接受的 v0.7。"""
+def check_current_migration_head(project_root: Path) -> None:
+    """确认提交的迁移 Head 与 v2.0 数据契约一致。"""
 
     versions = sorted((project_root / "migrations/versions").glob("*.py"))
-    if not versions or not versions[-1].name.startswith("20260721_0005_"):
-        raise RuntimeError("v0.8 业务迁移 Head 与 Plan 不一致")
+    if not versions or not versions[-1].name.startswith("20260724_0009_"):
+        raise RuntimeError("v2.0 业务迁移 Head 与 Plan 不一致")
     check_empty_database_migration()
+
+
+def check_deployment_bundle(project_root: Path) -> None:
+    """静态验证 Release Bundle 的版本、端口、权限和运行时依赖边界。"""
+
+    required = (
+        "Dockerfile",
+        "compose.yaml",
+        ".dockerignore",
+        ".env.deploy.example",
+        "requirements.runtime.lock",
+        "deploy/commerce-resolve",
+    )
+    if not all((project_root / item).is_file() for item in required):
+        raise RuntimeError("deployment_bundle_incomplete")
+    pyproject = tomllib.loads((project_root / "pyproject.toml").read_text("utf-8"))
+    frontend = json.loads(
+        (project_root / "frontend/package.json").read_text(encoding="utf-8")
+    )
+    if pyproject["project"]["version"] != frontend["version"]:
+        raise RuntimeError("deployment_version_mismatch")
+    compose = yaml.safe_load(
+        (project_root / "compose.yaml").read_text(encoding="utf-8")
+    )
+    if set(compose.get("services", {})) != {"app"}:
+        raise RuntimeError("deployment_service_topology_invalid")
+    app = compose["services"]["app"]
+    if not str(app["ports"][0]).startswith("127.0.0.1:"):
+        raise RuntimeError("deployment_public_binding_forbidden")
+    if not (
+        app.get("user") == "10001:10001"
+        and app.get("read_only") is True
+        and app.get("cap_drop") == ["ALL"]
+        and "no-new-privileges:true" in app.get("security_opt", [])
+    ):
+        raise RuntimeError("deployment_container_permissions_invalid")
+    runtime = (project_root / "requirements.runtime.lock").read_text(encoding="utf-8")
+    if "pytest==" in runtime or "ruff==" in runtime:
+        raise RuntimeError("deployment_runtime_contains_dev_tools")
+
+
+def check_compose_config(project_root: Path) -> None:
+    """使用 Docker Compose v2 解析正式配置，缺少容器能力时明确失败。"""
+
+    docker = shutil.which("docker")
+    if docker is None:
+        raise RuntimeError("docker_unavailable")
+    environment = {
+        key: value
+        for key in ("PATH", "HOME", "TMPDIR")
+        if (value := os.environ.get(key)) is not None
+    }
+    environment.update(
+        {
+            "APP_VERSION": "2.0.0",
+            "GIT_COMMIT": "0" * 40,
+            "BUILD_TIMESTAMP": "2026-07-21T00:00:00Z",
+            "OFFLINE_BASELINE_ID": "baseline-v2.0-release-check",
+        }
+    )
+    subprocess.run(
+        (
+            docker,
+            "compose",
+            "--env-file",
+            ".env.deploy.example",
+            "config",
+            "--quiet",
+        ),
+        cwd=project_root,
+        env=environment,
+        check=True,
+        capture_output=True,
+        timeout=60,
+    )
 
 
 def check_openapi_generated_types(project_root: Path) -> None:
@@ -118,11 +199,19 @@ def check_sensitive_artifacts(project_root: Path) -> None:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    """构造只允许三种固定检查的内部 CLI。"""
+    """构造只允许固定发布检查的内部 CLI。"""
 
     parser = argparse.ArgumentParser(prog="commerce-resolve-release-check")
     parser.add_argument(
-        "check", choices=("empty-migration", "v07-head", "openapi", "sensitive")
+        "check",
+        choices=(
+            "empty-migration",
+            "current-head",
+            "deployment-bundle",
+            "compose-config",
+            "openapi",
+            "sensitive",
+        ),
     )
     return parser
 
@@ -134,8 +223,18 @@ def main() -> int:
     project_root = Path.cwd()
     if args.check == "empty-migration":
         check_empty_database_migration()
-    elif args.check == "v07-head":
-        check_v07_migration_head(project_root)
+    elif args.check == "current-head":
+        check_current_migration_head(project_root)
+    elif args.check == "deployment-bundle":
+        check_deployment_bundle(project_root)
+    elif args.check == "compose-config":
+        try:
+            check_compose_config(project_root)
+        except RuntimeError as error:
+            if str(error) == "docker_unavailable":
+                print("docker_unavailable")
+                return 3
+            raise
     elif args.check == "openapi":
         check_openapi_generated_types(project_root)
     else:

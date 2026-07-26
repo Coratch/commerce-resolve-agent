@@ -13,16 +13,28 @@ from commerce_resolve.models import (
     PolicyAspect,
     PolicyQuery,
     RefundReason,
+    ServiceConcern,
     ShipmentView,
     ToolResult,
 )
+from commerce_resolve.order_context import ORDER_ID_PATTERN
 
-ORDER_ID_PATTERN = re.compile(r"\bORD-[A-Z0-9-]{3,32}\b", re.IGNORECASE)
-ORDER_INQUIRY_TERMS = ("订单", "物流", "快递", "order", "shipment")
+ORDER_INQUIRY_TERMS = (
+    "订单",
+    "物流",
+    "快递",
+    "到哪里",
+    "到哪",
+    "什么时候到",
+    "order",
+    "shipment",
+)
 L2_SUPPORT_TERMS = (
     "人工客服",
     "二线客服",
     "高级客服",
+    "深度处理",
+    "AI 深度处理",
     "升级处理",
     "进一步处理",
     "复杂售后",
@@ -95,6 +107,12 @@ def _extract_policy_aspects(text: str, topic: str) -> tuple[PolicyAspect, ...]:
     )
     for aspect, terms in mappings:
         if any(term in text for term in terms):
+            if (
+                aspect == "exception"
+                and "能不能退" in text
+                and not any(term in text for term in ("哪些不能退", "什么不能退"))
+            ):
+                continue
             if aspect == "timing" and topic != "refund":
                 continue
             if aspect == "method" and topic != "refund":
@@ -175,9 +193,33 @@ def _extract_refund_reason(text: str) -> RefundReason | None:
 def _is_refund_request(text: str, context: InterpretationContext | None) -> bool:
     """识别明确退款动作或上一轮退款信息补充。"""
 
-    if any(term in text for term in REFUND_REQUEST_TERMS):
-        return not _is_policy_question(text, None)
-    return bool(context is not None and context.pending_refund_request)
+    if context is not None and context.pending_refund_request:
+        return True
+    if not any(term in text for term in REFUND_REQUEST_TERMS):
+        return False
+    if "退款资格" in text or _is_policy_question(text, None):
+        return False
+    return any(
+        pattern.search(text) is not None for pattern in UNSUPPORTED_WRITE_PATTERNS
+    )
+
+
+def _extract_service_concerns(text: str) -> tuple[ServiceConcern, ...]:
+    """从同一轮文本中提取订单、物流、政策和退款资格关注点。"""
+
+    concerns: list[ServiceConcern] = []
+    if any(term in text for term in ("订单状态", "订单进度", "订单怎么样")):
+        concerns.append("order_status")
+    if any(term in text for term in ORDER_INQUIRY_TERMS if term != "订单"):
+        concerns.append("shipment_status")
+    if any(term in text for term in ("政策", "期限", "条件", "流程", "运费")):
+        concerns.append("policy")
+    if any(
+        term in text
+        for term in ("能退款", "可以退款", "是否退款", "退款资格", "能不能退款")
+    ):
+        concerns.append("refund_eligibility")
+    return tuple(dict.fromkeys(concerns))
 
 
 def _build_policy_query(
@@ -267,6 +309,24 @@ class FakeQueryInterpreter:
                 intent="refund_request",
                 order_id=order_id,
                 refund_reason=_extract_refund_reason(normalized_text),
+            )
+        concerns = _extract_service_concerns(normalized_text)
+        if len(concerns) >= 2:
+            needs_policy = bool({"policy", "refund_eligibility"}.intersection(concerns))
+            return Interpretation(
+                intent="service_guidance",
+                order_id=order_id,
+                concerns=concerns,
+                goal_summary=text.strip()[:500],
+                policy_query=(
+                    _build_policy_query(
+                        normalized_text,
+                        context,
+                        has_order_id=order_id is not None,
+                    )
+                    if needs_policy
+                    else None
+                ),
             )
         if _is_policy_question(normalized_text, context):
             return Interpretation(

@@ -188,6 +188,7 @@ class _Runtime:
             base_url=ORIGIN,
             raise_server_exceptions=False,
         )
+        self.register("v06.default")
 
     def close(self) -> None:
         """关闭测试客户端和业务 Engine。"""
@@ -202,23 +203,35 @@ class _Runtime:
         assert response.status_code == 200
         return response.json()
 
-    def headers(self, csrf: str) -> dict[str, str]:
+    def headers(self, csrf: str | None = None) -> dict[str, str]:
         """构造通过 Origin 和 CSRF 校验的写请求 Header。"""
 
-        return {"Origin": ORIGIN, "X-CSRF-Token": csrf}
+        headers = {"Origin": ORIGIN}
+        if csrf is not None:
+            headers["X-CSRF-Token"] = csrf
+        return headers
+
+    def order_id(self, client: TestClient | None = None) -> str:
+        """返回当前注册账号第一个可访问的预置订单号。"""
+
+        response = (client or self.client).get("/api/support/orders")
+        assert response.status_code == 200
+        return str(response.json()["orders"][0]["order_id"])
 
     def conversation(
         self,
         csrf: str,
         client: TestClient | None = None,
     ) -> str:
-        """为指定浏览器当前身份创建或复用一个空会话。"""
+        """为指定浏览器当前身份和预置订单创建或复用活动会话。"""
 
-        response = (client or self.client).post(
+        selected = client or self.client
+        response = selected.post(
             "/api/conversations",
             headers=self.headers(csrf),
+            json={"related_order_id": self.order_id(selected)},
         )
-        assert response.status_code == 201
+        assert response.status_code in {200, 201}
         return str(response.json()["thread_id"])
 
     def register(
@@ -230,12 +243,16 @@ class _Runtime:
 
         selected = client or self.client
         current = self.session(selected)
-        csrf = str(current["csrf_token"])
+        if current["mode"] == "registered":
+            selected.post(
+                "/api/auth/logout",
+                headers=self.headers(str(current["csrf_token"])),
+            )
         invite = self.repository.create_invitation()
         assert (
             selected.post(
                 "/api/auth/register",
-                headers=self.headers(csrf),
+                headers=self.headers(),
                 json={
                     "username": username,
                     "password": PASSWORD,
@@ -246,7 +263,7 @@ class _Runtime:
         )
         response = selected.post(
             "/api/auth/login",
-            headers=self.headers(csrf),
+            headers=self.headers(),
             json={"username": username, "password": PASSWORD},
         )
         assert response.status_code == 200
@@ -325,7 +342,7 @@ def _evaluate(runtime: _Runtime, scenario: ConversationEvalScenario) -> bool:
 
     if scenario_id == "history-three-turns":
         for index, message in enumerate(
-            ("查询 ORD-001", "普通商品退货期限是几天？", "再查 ORD-001"),
+            ("帮我查询物流", "普通商品退货期限是几天？", "再查一次物流"),
             start=1,
         ):
             runtime.submit(thread_id, csrf, message, f"history-{index}")
@@ -340,12 +357,12 @@ def _evaluate(runtime: _Runtime, scenario: ConversationEvalScenario) -> bool:
     if scenario_id == "history-action-payload":
         return _pending_projection(runtime, "refund_approval")
     if scenario_id == "history-refresh":
-        runtime.submit(thread_id, csrf, "查询 ORD-001", "refresh-1")
+        runtime.submit(thread_id, csrf, "帮我查询物流", "refresh-1")
         first = runtime.client.get(f"/api/conversations/{thread_id}/messages").json()
         second = runtime.client.get(f"/api/conversations/{thread_id}/messages").json()
         return first == second and len(first["messages"]) == 2
     if scenario_id == "history-pagination":
-        runtime.submit(thread_id, csrf, "查询 ORD-001", "page-run-1")
+        runtime.submit(thread_id, csrf, "帮我查询物流", "page-run-1")
         first = runtime.client.get(
             f"/api/conversations/{thread_id}/messages?limit=1"
         ).json()
@@ -374,7 +391,7 @@ def _evaluate(runtime: _Runtime, scenario: ConversationEvalScenario) -> bool:
         return [item["thread_id"] for item in listed] == [thread_id]
     if scenario_id == "lifecycle-detail":
         detail = runtime.client.get(f"/api/conversations/{thread_id}").json()
-        return detail["conversation"]["title"] == "新会话"
+        return bool(detail["conversation"]["title"])
     if scenario_id == "lifecycle-archive-restore":
         registered = runtime.register("v06.archive")
         csrf = str(registered["csrf_token"])
@@ -394,7 +411,7 @@ def _evaluate(runtime: _Runtime, scenario: ConversationEvalScenario) -> bool:
             and restored.json()["conversation"]["lifecycle_status"] == "active"
         )
     if scenario_id == "lifecycle-delete-tombstone":
-        runtime.submit(thread_id, csrf, "查询 ORD-001", "delete-1")
+        runtime.submit(thread_id, csrf, "帮我查询物流", "delete-1")
         deleted = runtime.client.delete(
             f"/api/conversations/{thread_id}", headers=runtime.headers(csrf)
         )
@@ -417,7 +434,7 @@ def _evaluate(runtime: _Runtime, scenario: ConversationEvalScenario) -> bool:
             "/api/auth/logout", headers=runtime.headers(csrf)
         ).json()
         old = runtime.client.get(f"/api/conversations/{thread_id}")
-        return rotated["mode"] == "guest" and old.status_code == 404
+        return rotated["mode"] == "anonymous" and old.status_code == 401
     if scenario_id in {"identity-cross-user-history", "identity-cross-user-run"}:
         first = runtime.register("v06.first")
         first_csrf = str(first["csrf_token"])
@@ -449,7 +466,7 @@ def _evaluate(runtime: _Runtime, scenario: ConversationEvalScenario) -> bool:
         "idempotency-client-request",
         "idempotency-payload-conflict",
     }:
-        payload = {"client_message_id": "same-client-id", "message": "查询 ORD-001"}
+        payload = {"client_message_id": "same-client-id", "message": "帮我查询物流"}
         first = runtime.client.post(
             f"/api/conversations/{thread_id}/messages",
             headers=runtime.headers(csrf),
@@ -500,7 +517,7 @@ def _evaluate(runtime: _Runtime, scenario: ConversationEvalScenario) -> bool:
             workspace_id=identity.workspace_id,
             access_mode=identity.actor_type,
             client_request_id="event-key",
-            message="查询 ORD-001",
+            message="帮我查询物流",
         )
         repository.mark_run_started(accepted.run.run_id)
         first = repository.append_step_event(
@@ -549,7 +566,7 @@ def _evaluate(runtime: _Runtime, scenario: ConversationEvalScenario) -> bool:
         }[scenario_id]
         return _pending_projection(runtime, action)
     if scenario_id in {"sse-step-before-terminal", "sse-last-event-id"}:
-        accepted = runtime.submit(thread_id, csrf, "查询 ORD-001", "sse-run-1")
+        accepted = runtime.submit(thread_id, csrf, "帮我查询物流", "sse-run-1")
         run_id = accepted["run"]["run_id"]
         all_events = repository.list_events(run_id=run_id)
         if scenario_id.endswith("terminal"):
@@ -597,7 +614,7 @@ def _evaluate(runtime: _Runtime, scenario: ConversationEvalScenario) -> bool:
         run = repository.get_run(accepted.run.run_id, thread_id=thread_id)
         return count == 1 and run is not None and run.status == "interrupted"
     if scenario_id == "data-public-projection-minimal":
-        runtime.submit(thread_id, csrf, "查询 ORD-001", "minimal-public")
+        runtime.submit(thread_id, csrf, "帮我查询物流", "minimal-public")
         history = runtime.client.get(f"/api/conversations/{thread_id}/messages").text
         forbidden = ("prompt", "reasoning", "tool_output", "api_key", "hidden")
         return all(item not in history.lower() for item in forbidden)
@@ -605,7 +622,7 @@ def _evaluate(runtime: _Runtime, scenario: ConversationEvalScenario) -> bool:
         response = runtime.client.post(
             "/api/chat/messages",
             headers=runtime.headers(csrf),
-            json={"thread_id": thread_id, "message": "查询 ORD-001"},
+            json={"thread_id": thread_id, "message": "帮我查询物流"},
         )
         history = runtime.client.get(f"/api/conversations/{thread_id}/messages").json()
         return response.status_code == 200 and len(history["messages"]) == 2

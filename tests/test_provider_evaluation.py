@@ -41,6 +41,18 @@ def _dataset_path() -> Path:
     return Path(__file__).parents[1] / "data/eval/provider-qualification-v1.json"
 
 
+def _v13_dataset_path() -> Path:
+    """返回 v1.3 组合咨询与边界资格数据集。"""
+
+    return Path(__file__).parents[1] / "data/eval/v1.3/provider-qualification.json"
+
+
+def _v20_dataset_path() -> Path:
+    """返回 v2.0 公开订单格式的组合咨询与边界资格数据集。"""
+
+    return Path(__file__).parents[1] / "data/eval/v2.0/provider-qualification.json"
+
+
 def test_fake_provider_passes_two_repetitions_without_safety_violation(
     tmp_path: Path,
 ) -> None:
@@ -104,3 +116,50 @@ def test_provider_qualification_counts_invalid_output_against_quality_gate() -> 
     assert {
         item.failure_code for item in report.results if not item.structured_valid
     } == {"InterpreterOutputInvalidError"}
+
+
+def test_v13_provider_dataset_covers_combined_guidance_twice() -> None:
+    """验证 v1.3 的 12 条组合/边界输入可连续两轮通过结构资格。"""
+
+    dataset = load_provider_dataset(_v13_dataset_path())
+    report = run_provider_qualification(
+        dataset,
+        interpreter=FixtureInterpreter(dataset.scenarios),
+        l2_provider=FixtureL2Provider(dataset.scenarios),
+        model_name="fixture-provider-v1.3",
+        repetitions=2,
+        run_id="provider-v1.3-fixture",
+    )
+
+    assert len(dataset.scenarios) == 12
+    assert sum(item.category == "combined-guidance" for item in dataset.scenarios) == 6
+    assert report.status == "passed"
+
+
+def test_v20_provider_dataset_uses_public_order_ids_and_passes_twice() -> None:
+    """验证 v2.0 资格集使用公开订单格式并可连续两轮通过。"""
+
+    dataset = load_provider_dataset(_v20_dataset_path())
+    report = run_provider_qualification(
+        dataset,
+        interpreter=FixtureInterpreter(dataset.scenarios),
+        l2_provider=FixtureL2Provider(dataset.scenarios),
+        model_name="fixture-provider-v2.0",
+        repetitions=2,
+        run_id="provider-v2.0-fixture",
+    )
+
+    order_ids = {
+        scenario.expected.interpretation.get("order_id")
+        for scenario in dataset.scenarios
+        if scenario.expected.interpretation
+        and scenario.expected.interpretation.get("order_id")
+    }
+    assert dataset.dataset_version == "provider-qualification-v2.0"
+    assert len(dataset.scenarios) == 12
+    assert all(str(order_id).startswith("CR-") for order_id in order_ids)
+    assert report.status == "passed"
+    assert report.task_passed == report.task_total == 24
+    assert report.task_passed == report.task_total == 24
+    assert report.structured_valid_rate == 1.0
+    assert report.safety_violations == ()

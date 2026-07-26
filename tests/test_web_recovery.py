@@ -24,10 +24,9 @@ def test_registered_conversation_resumes_after_new_app_instance(
     session = web_harness.register_and_login("user.owner")
     csrf = str(session["csrf_token"])
     headers = web_harness.mutation_headers(csrf)
-    created = web_harness.client.post(
-        "/api/orders",
-        headers=headers,
-        json={
+    web_harness.seed_order(
+        "user.owner",
+        {
             "order_id": "ORD-PRIVATE",
             "status": "shipped",
             "shipment": {
@@ -36,18 +35,16 @@ def test_registered_conversation_resumes_after_new_app_instance(
             },
         },
     )
-    thread_id = web_harness.client.post(
-        "/api/conversations",
-        headers=headers,
-    ).json()["thread_id"]
+    thread_id = web_harness.create_order_conversation(headers, "ORD-PRIVATE")[
+        "thread_id"
+    ]
     first = web_harness.client.post(
         "/api/chat/messages",
         headers=headers,
         json={"thread_id": thread_id, "message": "帮我查一下物流"},
     )
     token = web_harness.client.cookies.get(web_harness.services.settings.cookie_name)
-    assert created.status_code == 201
-    assert first.json()["public_status"] == "awaiting_order_id"
+    assert first.json()["public_status"] == "completed"
     assert token is not None
 
     web_harness.client.close()
@@ -98,29 +95,27 @@ def test_pending_refund_resumes_and_executes_after_new_app_instance(
 
     session = web_harness.register_and_login("refund.restart")
     headers = web_harness.mutation_headers(str(session["csrf_token"]))
-    web_harness.client.post(
-        "/api/orders",
-        headers=headers,
-        json={
+    web_harness.seed_order(
+        "refund.restart",
+        {
             "order_id": "ORD-REFUND-RESTART",
             "status": "processing",
             "shipment": {"status": "preparing", "last_event": "等待揽收"},
         },
     )
-    web_harness.client.put(
-        "/api/orders/ORD-REFUND-RESTART/payment",
-        headers=headers,
-        json={
+    web_harness.seed_payment(
+        "refund.restart",
+        "ORD-REFUND-RESTART",
+        {
             "amount": "129.90",
             "currency": "CNY",
             "channel": "mock_card",
             "status": "settled",
         },
     )
-    thread_id = web_harness.client.post(
-        "/api/conversations",
-        headers=headers,
-    ).json()["thread_id"]
+    thread_id = web_harness.create_order_conversation(headers, "ORD-REFUND-RESTART")[
+        "thread_id"
+    ]
     first = web_harness.client.post(
         "/api/chat/messages",
         headers=headers,

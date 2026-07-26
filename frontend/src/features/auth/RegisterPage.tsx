@@ -1,4 +1,5 @@
 import { useMutation } from "@tanstack/react-query";
+import { CircleUserRound, UserPlus } from "lucide-react";
 import { type FormEvent, useState } from "react";
 import { Navigate, Link } from "react-router-dom";
 
@@ -28,11 +29,15 @@ export function RegisterPage({ session }: RegisterPageProps) {
   }
 
   if (session.mode === "registered") {
-    return <Navigate to="/orders" replace />;
+    return <Navigate to="/support" replace />;
   }
   return (
     <main className={styles.page}>
       <section className={styles.card}>
+        <span className={styles.heroIcon} aria-hidden="true">
+          <CircleUserRound size={24} strokeWidth={1.6} />
+        </span>
+        <span className={styles.eyebrow}>邀请注册</span>
         <h1>使用邀请码注册</h1>
         <p>账号拥有独立演示工作区；邀请码只用于注册，不作为登录凭证。</p>
         {mutation.isSuccess ? (
@@ -83,6 +88,7 @@ export function RegisterPage({ session }: RegisterPageProps) {
               </div>
             )}
             <button type="submit" disabled={mutation.isPending}>
+              <UserPlus aria-hidden="true" size={17} />
               {mutation.isPending ? "正在创建账号…" : "创建账号"}
             </button>
           </form>

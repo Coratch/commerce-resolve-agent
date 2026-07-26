@@ -7,7 +7,9 @@ from uuid import uuid4
 from fastapi import APIRouter, BackgroundTasks, Request
 from langgraph.types import Command
 
+from commerce_resolve.adapters.sqlite_business import BusinessDataError
 from commerce_resolve.adapters.sqlite_conversations import ConversationDataError
+from commerce_resolve.adapters.sqlite_service_center import SqliteSupportCenterReader
 from commerce_resolve.checkpointing import open_sqlite_checkpointer
 from commerce_resolve.conversation_models import AcceptedRun, RunKind
 from commerce_resolve.conversation_projection import (
@@ -27,13 +29,13 @@ from ..dependencies import (
     WebServices,
     enforce_rate_limit,
     get_services,
-    require_mutation_access,
     require_registered_access,
 )
-from ..errors import api_error
+from ..errors import api_error, llm_quota_exceeded_message
 from ..schemas import (
     ChatMessageRequest,
     ChatResponse,
+    ConversationCreateRequest,
     ConversationResponse,
     L2MemoryDecisionRequest,
     L2UpgradeDecisionRequest,
@@ -55,30 +57,38 @@ router = APIRouter(prefix="/api", tags=["chat"])
     response_model=ConversationResponse,
     status_code=201,
 )
-def create_conversation(request: Request) -> ConversationResponse:
-    """为当前服务端 Principal 创建并持久绑定随机 thread。"""
+def create_conversation(
+    request: Request,
+    payload: ConversationCreateRequest,
+) -> ConversationResponse:
+    """验证本人订单后恢复或创建该订单唯一活动 Thread。"""
 
     services = get_services(request)
-    access = require_mutation_access(request)
-    existing = services.require_conversation_repository().list_conversations(
-        subject_id=access.identity.subject_id,
+    access = require_registered_access(request, mutation=True)
+    user_id = access.principal.user_id
+    if user_id is None:
+        raise api_error(401, "authentication_required")
+    related_order_id = payload.related_order_id.upper()
+    accessible = SqliteSupportCenterReader(services.repository.engine).get_order(
+        user_id=user_id,
         workspace_id=access.principal.workspace_id,
-        access_mode=access.principal.mode,
-        limit=1,
+        order_id=related_order_id,
     )
-    if (
-        existing
-        and existing[0].message_count == 0
-        and existing[0].pending_action is None
-        and existing[0].history_state == "complete"
-    ):
-        return ConversationResponse(thread_id=existing[0].thread_id)
-    conversation = services.repository.create_conversation(
-        subject_id=access.identity.subject_id,
-        workspace_id=access.principal.workspace_id,
-        access_mode=access.principal.mode,
+    if accessible is None:
+        raise api_error(404, "order_not_accessible")
+    try:
+        conversation, created = services.repository.get_or_create_order_conversation(
+            subject_id=access.identity.subject_id,
+            workspace_id=access.principal.workspace_id,
+            order_id=related_order_id,
+        )
+    except BusinessDataError as error:
+        raise api_error(409, error.error_code) from None
+    return ConversationResponse(
+        thread_id=conversation.thread_id,
+        related_order_id=related_order_id,
+        created=created,
     )
-    return ConversationResponse(thread_id=conversation.thread_id)
 
 
 def _llm_access(
@@ -112,7 +122,17 @@ def _llm_access(
             if error_code == "llm_not_configured"
             else 403
         )
-        raise api_error(status_code, error_code)
+        raise api_error(
+            status_code,
+            error_code,
+            (
+                llm_quota_exceeded_message(
+                    services.settings.llm_daily_call_limit
+                )
+                if error_code == "llm_quota_exceeded"
+                else None
+            ),
+        )
     if consume:
         accepted = services.repository.accept_llm_call(
             principal.user_id,
@@ -120,7 +140,13 @@ def _llm_access(
             services.settings.llm_daily_call_limit,
         )
         if not accepted:
-            raise api_error(429, "llm_quota_exceeded")
+            raise api_error(
+                429,
+                "llm_quota_exceeded",
+                llm_quota_exceeded_message(
+                    services.settings.llm_daily_call_limit
+                ),
+            )
     usage = services.repository.get_llm_usage(principal.user_id, usage_date)
     remaining = max(
         0,
@@ -173,6 +199,8 @@ def _authorized_conversation(
     )
     if conversation is None:
         raise api_error(404, "conversation_not_accessible")
+    if conversation.related_order_id is None:
+        raise api_error(409, "order_context_required")
     return access, conversation
 
 
@@ -229,6 +257,7 @@ def _persist_legacy_exchange(
         assistant_message=response.assistant_message,
         payload=public_message_payload(response),
         pending_action=response.l2_pending_action,
+        payload_version=2,
     )
     return response
 
@@ -310,6 +339,7 @@ def _run_context(
     *,
     l2_allowed: bool,
     l2_quota_remaining: int,
+    bound_order_id: str | None = None,
 ) -> RunContext:
     """从可信 Session 构造不能由客户端覆盖的 Graph Runtime Context。"""
 
@@ -322,6 +352,7 @@ def _run_context(
         subject_id=access.identity.subject_id,
         l2_allowed=l2_allowed,
         l2_quota_remaining=l2_quota_remaining,
+        bound_order_id=bound_order_id,
     )
 
 
@@ -366,7 +397,7 @@ def send_chat_message(
     """验证 thread 归属后执行一轮唯一主图并返回公开结果。"""
 
     services = get_services(request)
-    access = require_mutation_access(request)
+    access = require_registered_access(request, mutation=True)
     enforce_rate_limit(
         services,
         f"chat:{access.principal.actor_id}",
@@ -383,11 +414,7 @@ def send_chat_message(
     with services.thread_locks.acquire(payload.thread_id) as acquired:
         if not acquired:
             raise api_error(409, "thread_busy")
-        snapshot = (
-            _pending_snapshot(request, payload.thread_id)
-            if access.principal.mode == "registered"
-            else None
-        )
+        snapshot = _pending_snapshot(request, payload.thread_id)
         if snapshot is not None and snapshot.interrupts:
             if snapshot.next == ("l2_await_user_input",):
                 result, next_nodes = _invoke_registered_l2(
@@ -418,11 +445,7 @@ def send_chat_message(
             error_code = error_codes.get(snapshot.next)
             if error_code is not None:
                 raise api_error(409, error_code)
-        if access.principal.mode == "guest":
-            dependencies = services.guest_dependencies(access.principal)
-            remaining = 0
-        else:
-            dependencies, remaining = _registered_dependencies(services, access)
+        dependencies, remaining = _registered_dependencies(services, access)
         try:
             with open_sqlite_memory_store(services.settings.memory_db_path) as store:
                 with open_sqlite_checkpointer(
@@ -439,8 +462,9 @@ def send_chat_message(
                         context=_run_context(
                             access,
                             payload.thread_id,
-                            l2_allowed=access.principal.mode == "registered",
+                            l2_allowed=True,
                             l2_quota_remaining=remaining,
+                            bound_order_id=conversation.related_order_id,
                         ),
                     )
                     next_nodes = graph.get_state(
@@ -490,11 +514,14 @@ def get_pending_l2(thread_id: str, request: Request) -> PendingL2Response:
         pending_action=action,
         upgrade_preview=(
             PublicL2UpgradePreview.from_domain(preview)
-            if isinstance(preview, L2UpgradePreview)
+            if action == "upgrade_confirmation"
+            and isinstance(preview, L2UpgradePreview)
             else None
         ),
         memory_proposal=(
-            PublicMemoryProposal.from_domain(proposal) if proposal is not None else None
+            PublicMemoryProposal.from_domain(proposal)
+            if action == "memory_confirmation" and proposal is not None
+            else None
         ),
     )
 
@@ -540,7 +567,7 @@ def decide_l2_upgrade(
         request_kind="l2_upgrade_decision",
         client_request_id=client_request_id,
         label=(
-            "确认升级至 AI 二线客服" if payload.decision == "confirm" else "取消升级"
+            "由 AI 继续处理" if payload.decision == "confirm" else "暂不继续处理"
         ),
         payload={"preview_id": payload.preview_id, "decision": payload.decision},
     )

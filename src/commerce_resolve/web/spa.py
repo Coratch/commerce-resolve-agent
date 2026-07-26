@@ -8,11 +8,14 @@ from fastapi.staticfiles import StaticFiles
 
 
 def register_spa_routes(app: FastAPI, dist_path: Path) -> None:
-    """把 Vite 产物挂载到 API 路由之后，缺失构建时保留明确 404。"""
+    """挂载 Vite 代码与商品目录，缺失构建时保留明确 404。"""
 
     assets_path = dist_path / "assets"
     if assets_path.is_dir():
         app.mount("/assets", StaticFiles(directory=assets_path), name="assets")
+    catalog_path = dist_path / "catalog"
+    if catalog_path.is_dir():
+        app.mount("/catalog", StaticFiles(directory=catalog_path), name="catalog")
 
     @app.get("/{full_path:path}", include_in_schema=False)
     def spa_fallback(full_path: str):

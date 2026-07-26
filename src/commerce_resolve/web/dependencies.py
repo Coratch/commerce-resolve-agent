@@ -7,7 +7,7 @@ import time
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import datetime
 
 from fastapi import Request, Response
 from sqlalchemy import Engine
@@ -19,6 +19,7 @@ from commerce_resolve.adapters.fake import (
     FakeQueryInterpreter,
 )
 from commerce_resolve.adapters.l2_freshness import GatewayL2FreshnessReader
+from commerce_resolve.adapters.sqlite_admin import SqliteAdminRepository
 from commerce_resolve.adapters.sqlite_business import (
     SqliteBusinessGateway,
     SqliteBusinessRepository,
@@ -34,6 +35,7 @@ from commerce_resolve.adapters.sqlite_refunds import (
     SqliteRefundGateway,
     SqliteRefundRepository,
 )
+from commerce_resolve.adapters.sqlite_workspaces import SqliteWorkspaceRepository
 from commerce_resolve.business_models import SessionBundle, SessionIdentity
 from commerce_resolve.gateways import Dependencies, QueryInterpreter
 from commerce_resolve.l2_gateways import L2AgentModel, L2Dependencies
@@ -42,9 +44,8 @@ from commerce_resolve.l2_tools import L2ToolRegistry
 from commerce_resolve.models import (
     Interpretation,
     InterpretationContext,
-    OrderView,
-    ShipmentView,
 )
+from commerce_resolve.service_center import GuestSupportCatalog
 
 from .errors import api_error
 from .schemas import SessionCapabilities, SessionResponse
@@ -135,11 +136,15 @@ class WebServices:
     conversation_repository: SqliteConversationRepository | None = None
     refund_repository: SqliteRefundRepository | None = None
     l2_repository: SqliteL2CaseRepository | None = None
+    admin_repository: SqliteAdminRepository | None = None
+    workspace_repository: SqliteWorkspaceRepository | None = None
     l2_agent_factory: Callable[[], L2AgentModel] | None = None
     engine: Engine | None = None
     llm_access_policy: LlmAccessPolicy = field(default_factory=LlmAccessPolicy)
     rate_limiter: InMemoryRateLimiter = field(default_factory=InMemoryRateLimiter)
     thread_locks: ThreadLockRegistry = field(default_factory=ThreadLockRegistry)
+    workspace_locks: ThreadLockRegistry = field(default_factory=ThreadLockRegistry)
+    guest_catalog: GuestSupportCatalog = field(default_factory=GuestSupportCatalog)
 
     def __post_init__(self) -> None:
         """默认让公开会话、退款与 L2 Repository 复用业务 Engine。"""
@@ -152,6 +157,12 @@ class WebServices:
             self.refund_repository = SqliteRefundRepository(self.repository.engine)
         if self.l2_repository is None:
             self.l2_repository = SqliteL2CaseRepository(self.repository.engine)
+        if self.admin_repository is None:
+            self.admin_repository = SqliteAdminRepository(self.repository.engine)
+        if self.workspace_repository is None:
+            self.workspace_repository = SqliteWorkspaceRepository(
+                self.repository.engine
+            )
         if self.l2_agent_factory is None:
             self.l2_agent_factory = _default_scripted_l2_agent
 
@@ -175,6 +186,20 @@ class WebServices:
         if self.l2_repository is None:
             raise RuntimeError("L2 Case Repository 未装配")
         return self.l2_repository
+
+    def require_admin_repository(self) -> SqliteAdminRepository:
+        """返回运营控制台 Repository；缺失表示应用装配错误。"""
+
+        if self.admin_repository is None:
+            raise RuntimeError("Admin Repository 未装配")
+        return self.admin_repository
+
+    def require_workspace_repository(self) -> SqliteWorkspaceRepository:
+        """返回演示工作区 Repository；缺失表示应用装配错误。"""
+
+        if self.workspace_repository is None:
+            raise RuntimeError("Workspace Repository 未装配")
+        return self.workspace_repository
 
     def require_l2_agent_factory(self) -> Callable[[], L2AgentModel]:
         """返回请求级 L2 Model 工厂，避免把客户端或连接写入 State。"""
@@ -203,17 +228,8 @@ class WebServices:
     def guest_dependencies(self, principal: AccessPrincipal) -> Dependencies:
         """为游客装配只含共享 demo 数据和 Fake Interpreter 的依赖。"""
 
-        order = OrderView(
-            order_id="ORD-001",
-            user_id=principal.actor_id,
-            status="shipped",
-        )
-        shipment = ShipmentView(
-            order_id="ORD-001",
-            status="in_transit",
-            last_event="包裹已离开上海转运中心",
-            estimated_delivery_at=datetime(2026, 7, 18, tzinfo=UTC).date(),
-        )
+        order = self.guest_catalog.order_view(principal.actor_id)
+        shipment = self.guest_catalog.shipment_view()
         return Dependencies(
             interpreter=FakeQueryInterpreter(),
             order_gateway=FakeOrderGateway(
@@ -334,6 +350,7 @@ def principal_from_identity(
             and services.settings.llm_feature_enabled
             and services.model_configured
         ),
+        role=identity.user_role,
     )
 
 
@@ -372,6 +389,15 @@ def require_mutation_access(request: Request) -> RequestAccess:
     return access
 
 
+def require_public_mutation_origin(request: Request) -> None:
+    """验证登录和注册等无 Session 写请求来自允许的同源页面。"""
+
+    services = get_services(request)
+    origin = request.headers.get("origin", "").rstrip("/")
+    if origin not in services.settings.allowed_origins:
+        raise api_error(403, "origin_not_allowed")
+
+
 def require_registered_access(request: Request, *, mutation: bool) -> RequestAccess:
     """验证当前请求属于注册用户，并按需执行写请求来源检查。"""
 
@@ -382,6 +408,15 @@ def require_registered_access(request: Request, *, mutation: bool) -> RequestAcc
     )
     if access.principal.mode != "registered" or access.principal.user_id is None:
         raise api_error(401, "authentication_required")
+    return access
+
+
+def require_admin_access(request: Request, *, mutation: bool) -> RequestAccess:
+    """验证当前请求属于数据库已授予管理员角色的注册账号。"""
+
+    access = require_registered_access(request, mutation=mutation)
+    if access.principal.role != "admin":
+        raise api_error(403, "admin_access_required")
     return access
 
 
@@ -412,22 +447,36 @@ def build_session_response(
 ) -> SessionResponse:
     """构造不暴露内部用户、工作区和 Session Token 的公开会话响应。"""
 
-    registered = identity.actor_type == "registered"
-    can_use_llm = (
-        registered
-        and services.settings.llm_feature_enabled
-        and services.model_configured
-    )
+    if identity.actor_type != "registered":
+        raise ValueError("公开 Session 只允许投影注册身份")
+    can_use_llm = services.settings.llm_feature_enabled and services.model_configured
     return SessionResponse(
-        mode=identity.actor_type,
+        mode="registered",
         username=identity.username,
-        session_scope="account" if registered else "browser",
+        role=identity.user_role,
+        session_scope="account",
         csrf_token=csrf_token,
         expires_at=identity.expires_at,
         capabilities=SessionCapabilities(
-            can_manage_orders=registered,
-            can_manage_refunds=registered,
+            can_manage_orders=False,
+            can_manage_refunds=True,
             can_use_llm=can_use_llm,
+            can_access_admin=identity.user_role == "admin",
+        ),
+    )
+
+
+def build_anonymous_session_response() -> SessionResponse:
+    """构造不创建 Cookie、工作区或业务能力的匿名公开状态。"""
+
+    return SessionResponse(
+        mode="anonymous",
+        session_scope="none",
+        capabilities=SessionCapabilities(
+            can_manage_orders=False,
+            can_manage_refunds=False,
+            can_use_llm=False,
+            can_access_admin=False,
         ),
     )
 

@@ -28,7 +28,7 @@ from commerce_resolve.l2_models import (
 if TYPE_CHECKING:
     from commerce_resolve.l2_tools import L2ToolRegistry
 
-L2_MODEL_UNAVAILABLE_MESSAGE = "AI 二线客服暂时不可用，请稍后重试。"
+L2_MODEL_UNAVAILABLE_MESSAGE = "AI 深度处理暂时不可用，请稍后重试。"
 
 
 class L2ModelUnavailableError(RuntimeError):

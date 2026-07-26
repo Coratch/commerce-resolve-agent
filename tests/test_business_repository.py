@@ -230,7 +230,7 @@ def test_private_orders_support_crud_and_cross_workspace_isolation(
     )
 
     assert order_a.order_id == order_b.order_id == "ORD-SAME"
-    assert repository.list_orders(user_id=user_a, workspace_id=workspace_a) == [order_a]
+    assert order_a in repository.list_orders(user_id=user_a, workspace_id=workspace_a)
     with pytest.raises(BusinessDataError, match="order_not_accessible"):
         repository.get_order_record(
             user_id=user_a,
@@ -260,8 +260,15 @@ def test_private_orders_support_crud_and_cross_workspace_isolation(
         workspace_id=workspace_a,
         order_id="ORD-SAME",
     )
-    assert repository.list_orders(user_id=user_a, workspace_id=workspace_a) == []
-    assert repository.list_orders(user_id=user_b, workspace_id=workspace_b) == [order_b]
+    remaining = repository.list_orders(user_id=user_a, workspace_id=workspace_a)
+    assert len(remaining) == 3
+    assert all(order.order_id != "ORD-SAME" for order in remaining)
+    other_workspace = repository.list_orders(
+        user_id=user_b,
+        workspace_id=workspace_b,
+    )
+    assert len(other_workspace) == 4
+    assert order_b in other_workspace
 
 
 def test_llm_quota_is_atomically_limited(

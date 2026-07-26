@@ -1,4 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { KeyRound, LogIn } from "lucide-react";
 import { type FormEvent, useState } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
 
@@ -21,7 +22,7 @@ export function LoginPage({ session }: LoginPageProps) {
     mutationFn: login,
     onSuccess: (value) => {
       queryClient.setQueryData(sessionQueryKey, value);
-      navigate("/orders");
+      navigate("/support");
     },
   });
 
@@ -32,13 +33,17 @@ export function LoginPage({ session }: LoginPageProps) {
   }
 
   if (session.mode === "registered") {
-    return <Navigate to="/orders" replace />;
+    return <Navigate to="/support" replace />;
   }
   return (
     <main className={styles.page}>
       <section className={styles.card}>
+        <span className={styles.heroIcon} aria-hidden="true">
+          <KeyRound size={24} strokeWidth={1.6} />
+        </span>
+        <span className={styles.eyebrow}>账号服务</span>
         <h1>登录私有工作区</h1>
-        <p>登录后可以管理自己的演示订单，并使用服务端授权的 LLM。</p>
+        <p>登录后可以查看个人订单、继续售后服务，并使用完整的智能售后能力。</p>
         <form className={styles.form} onSubmit={handleSubmit}>
           <label>
             用户名
@@ -67,6 +72,7 @@ export function LoginPage({ session }: LoginPageProps) {
             </div>
           )}
           <button type="submit" disabled={mutation.isPending}>
+            <LogIn aria-hidden="true" size={17} />
             {mutation.isPending ? "正在登录…" : "登录"}
           </button>
         </form>

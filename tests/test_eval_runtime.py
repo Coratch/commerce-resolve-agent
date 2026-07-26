@@ -17,6 +17,7 @@ from commerce_resolve.eval_runtime import (
     read_run_report,
     result_fingerprint,
     run_offline_evaluation,
+    source_fingerprint,
     status_exit_code,
     write_run_artifact,
 )
@@ -58,6 +59,43 @@ def test_offline_run_is_repeatable_and_artifact_is_readable(tmp_path: Path) -> N
     run_dir = write_run_artifact(first, tmp_path)
     assert read_run_report(run_dir) == first
     assert "test-run" in (run_dir / "report.md").read_text("utf-8")
+
+
+def test_all_runs_the_v20_active_release_profile() -> None:
+    """验证 all 不会重新启用已被 v2.0 明确取代的历史产品契约。"""
+
+    report = run_offline_evaluation(Path(__file__).parents[1])
+
+    assert report.status == "passed"
+    assert report.manifest.profile_version == "v2.0"
+    assert tuple(suite.suite_version for suite in report.suites) == (
+        "v0.1",
+        "v0.2",
+        "v0.4",
+        "v0.5",
+        "v0.6",
+        "v0.7",
+        "v0.8",
+        "v1.0",
+        "v2.0",
+    )
+    assert report.aggregate_metrics["scenario_total"] == 265
+
+
+def test_source_fingerprint_tracks_demo_catalog_and_public_assets(
+    tmp_path: Path,
+) -> None:
+    """验证目录事实与本地商品资源变化会使离线发布指纹失效。"""
+
+    catalog = tmp_path / "data/demo/v1.3/catalog.json"
+    asset = tmp_path / "frontend/public/catalog/v1.3/product.webp"
+    catalog.parent.mkdir(parents=True)
+    asset.parent.mkdir(parents=True)
+    catalog.write_text('{"version":"v1.3"}', encoding="utf-8")
+    asset.write_bytes(b"first")
+    initial = source_fingerprint(tmp_path)
+    asset.write_bytes(b"changed")
+    assert source_fingerprint(tmp_path) != initial
 
 
 def test_artifact_rejects_sensitive_fields_and_existing_run(tmp_path: Path) -> None:

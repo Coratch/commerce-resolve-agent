@@ -8,12 +8,15 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 from commerce_resolve.business_models import (
+    ORDER_ID_PATTERN_TEXT,
     MockPaymentRecord,
     MockRefundRecord,
+    OrderItemRecord,
     OrderStatus,
     PaymentChannel,
     PaymentCurrency,
     PaymentStatus,
+    ProductCategory,
     RefundStatus,
     ShipmentStatus,
     format_minor_units,
@@ -40,12 +43,27 @@ from commerce_resolve.models import (
     RefundPreview,
     RefundVerification,
 )
+from commerce_resolve.service_resolution import ServiceResolution
 
 
 class StrictRequest(BaseModel):
     """作为拒绝客户端额外身份或权限字段的请求基类。"""
 
     model_config = ConfigDict(extra="forbid")
+
+
+class AdminInvitationCreateRequest(StrictRequest):
+    """接收后台创建邀请码的有限有效期和使用次数。"""
+
+    expires_in_hours: int = Field(default=168, ge=1, le=24 * 30)
+    max_uses: int = Field(default=1, ge=1, le=100)
+
+
+class AdminDemoScenarioSeedRequest(StrictRequest):
+    """接收管理员选择的场景和稳定幂等请求标识。"""
+
+    scenario_id: str = Field(pattern=r"^[a-z0-9-]{3,80}$")
+    client_request_id: str = Field(min_length=8, max_length=64)
 
 
 class RegisterRequest(StrictRequest):
@@ -105,18 +123,20 @@ class SessionCapabilities(BaseModel):
     can_manage_orders: bool
     can_manage_refunds: bool
     can_use_llm: bool
+    can_access_admin: bool
 
 
 class SessionResponse(BaseModel):
-    """返回浏览器当前访问模式和内存态 CSRF Token。"""
+    """返回浏览器当前认证状态和注册 Session 的有限能力。"""
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    mode: Literal["guest", "registered"]
+    mode: Literal["anonymous", "registered"]
     username: str | None = None
-    session_scope: Literal["browser", "account"]
-    csrf_token: str
-    expires_at: datetime
+    role: Literal["customer", "admin"] | None = None
+    session_scope: Literal["none", "account"]
+    csrf_token: str | None = None
+    expires_at: datetime | None = None
     capabilities: SessionCapabilities
 
 
@@ -129,12 +149,27 @@ class RegistrationResponse(BaseModel):
     status: Literal["registered"] = "registered"
 
 
+class WorkspaceResetRequest(StrictRequest):
+    """接收稳定请求标识和不可含糊的完整重置确认。"""
+
+    client_request_id: str = Field(min_length=8, max_length=64)
+    confirmation: Literal["RESET"]
+
+
 class ConversationResponse(BaseModel):
-    """返回当前身份新建的随机 conversation thread。"""
+    """返回当前订单活动 conversation，并标明是否本次新建。"""
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     thread_id: str
+    related_order_id: str
+    created: bool
+
+
+class ConversationCreateRequest(StrictRequest):
+    """接收必填订单绑定，不接受客户端身份或工作区字段。"""
+
+    related_order_id: str = Field(pattern=ORDER_ID_PATTERN_TEXT)
 
 
 class AsyncChatMessageRequest(StrictRequest):
@@ -251,7 +286,7 @@ class PublicL2UpgradePreview(BaseModel):
     allowed_tools: tuple[str, ...]
     max_steps: int
     reads_confirmed_preferences: bool
-    agent_identity: Literal["AI 二线客服，并非真人"] = "AI 二线客服，并非真人"
+    agent_identity: Literal["AI 深度处理助手，并非真人"] = "AI 深度处理助手，并非真人"
 
     @classmethod
     def from_domain(cls, preview: L2UpgradePreview) -> PublicL2UpgradePreview:
@@ -512,6 +547,7 @@ class ChatResponse(BaseModel):
     ) = None
     l2_trace_events: tuple[PublicL2TraceEvent, ...] = ()
     memory_proposal: PublicMemoryProposal | None = None
+    service_resolution: ServiceResolution | None = None
 
 
 class PendingL2Response(BaseModel):
@@ -610,6 +646,28 @@ class PublicShipment(BaseModel):
     estimated_delivery_at: date | None = None
 
 
+class PublicOrderItem(BaseModel):
+    """向浏览器返回不参与退款计算的最小商品行。"""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    sku: str
+    title: str
+    quantity: int
+    product_category: ProductCategory
+
+    @classmethod
+    def from_record(cls, record: OrderItemRecord) -> PublicOrderItem:
+        """把商品行领域记录转换为不含内部主键的公开响应。"""
+
+        return cls(
+            sku=record.sku,
+            title=record.title,
+            quantity=record.quantity,
+            product_category=record.product_category,
+        )
+
+
 class PublicPayment(BaseModel):
     """向浏览器返回可展示但不可作为退款执行参数的 Mock 支付事实。"""
 
@@ -677,6 +735,7 @@ class PublicOrder(BaseModel):
 
     order_id: str
     status: OrderStatus
+    items: tuple[PublicOrderItem, ...] = ()
     shipment: PublicShipment | None = None
     payment: PublicPayment | None = None
     refunds: tuple[PublicRefund, ...] = ()

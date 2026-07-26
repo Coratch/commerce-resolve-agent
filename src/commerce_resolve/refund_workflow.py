@@ -31,7 +31,11 @@ REFUND_INELIGIBLE_MESSAGES = {
     "refund_payment_not_settled": "该订单的 Mock 支付尚未结算，当前不能退款。",
     "refund_balance_zero": "该订单已无可退款余额。",
     "refund_requires_return_flow": (
-        "该订单已发货或送达，需要退货流程，v0.4 不直接退款。"
+        "该订单已发货或送达，需要先进入退货处理流程，当前没有创建退款。"
+    ),
+    "refund_window_expired": (
+        "该订单已超过 7 天退货期限，当前不能直接退款。"
+        "你仍可说明质量问题，我可以继续进行 AI 深度处理并创建 Mock Case。"
     ),
     "refund_conflict": "该订单已有待处理或已完成退款，不能重复申请。",
     "refund_business_facts_conflict": "订单与物流状态不一致，暂时不能安全退款。",
@@ -62,12 +66,12 @@ def _refund_policy_facts(
     *,
     as_of: date,
 ) -> tuple[tuple[PolicyFact, ...], str]:
-    """按固定查询解析退款资格、原路退款和审批流程三条当前事实。"""
+    """解析退款授权事实及退货期限证据，供确定性规则按需使用。"""
 
     repository = dependencies.policy_repository
     if repository is None:
         return (), "unavailable"
-    result = repository.search(
+    refund_result = repository.search(
         "发货前直接整单退款、原路退款与审核流程",
         PolicyQuery(
             topic="refund",
@@ -76,14 +80,28 @@ def _refund_policy_facts(
         as_of,
         limit=8,
     )
-    facts = resolve_evidence_facts(repository, result.evidence_refs)
-    facts_by_id = {fact.fact_id: fact for fact in facts}
-    selected = tuple(
-        facts_by_id[fact_id]
-        for fact_id in REQUIRED_REFUND_FACT_IDS
-        if fact_id in facts_by_id
+    return_result = repository.search(
+        "普通商品签收后退货期限",
+        PolicyQuery(
+            topic="return",
+            aspects=("window",),
+        ),
+        as_of,
+        limit=4,
     )
-    return selected, f"{result.corpus_version}:{result.corpus_hash}"
+    facts = resolve_evidence_facts(
+        repository,
+        refund_result.evidence_refs + return_result.evidence_refs,
+    )
+    facts_by_id = {fact.fact_id: fact for fact in facts}
+    candidate_ids = REQUIRED_REFUND_FACT_IDS + ("return.window.general",)
+    selected = tuple(
+        facts_by_id[fact_id] for fact_id in candidate_ids if fact_id in facts_by_id
+    )
+    return (
+        selected,
+        f"{refund_result.corpus_version}:{refund_result.corpus_hash}",
+    )
 
 
 class RefundNodes:

@@ -12,8 +12,10 @@ from commerce_resolve.gateways import Dependencies
 from commerce_resolve.l2_models import L2RuntimeState
 from commerce_resolve.l2_workflow import register_l2_workflow
 from commerce_resolve.models import InterpretationContext, OrderView, ShipmentView
+from commerce_resolve.order_context import extract_explicit_order_id
 from commerce_resolve.policy_workflow import register_policy_workflow
 from commerce_resolve.refund_workflow import register_refund_workflow
+from commerce_resolve.service_guidance import register_service_guidance_workflow
 from commerce_resolve.state import AgentState, RunContext
 
 ORDER_STATUS_LABELS = {
@@ -30,7 +32,20 @@ SHIPMENT_STATUS_LABELS = {
 ORDER_UNAVAILABLE_MESSAGE = "无法查询该订单，请检查订单号或当前账号。"
 TEMPORARILY_FAILED_MESSAGE = "订单或物流服务暂时不可用，请稍后重试。"
 UNSUPPORTED_WRITE_MESSAGE = (
-    "当前版本只支持订单和物流查询，暂不执行退款、取消或修改订单操作。"
+    "当前演示支持经确认的 Mock 退款，暂不支持退货寄回、换货、取消订单或修改收货信息。"
+    "如需申请退款，请明确说明退款原因。"
+)
+MAX_INTENT_CLARIFICATION_ATTEMPTS = 2
+INTENT_CLARIFICATION_MESSAGES = (
+    "我还不确定你希望处理什么。你可以告诉我：查询订单或物流、咨询售后政策、"
+    "申请 Mock 退款，或进入 AI 深度处理。",
+    "为了准确处理，请明确选择一项：查询订单/物流、咨询售后政策、申请 Mock 退款，"
+    "或进入 AI 深度处理。",
+)
+INTENT_FALLBACK_MESSAGE = (
+    "我暂时仍无法确认你的需求，本次澄清已结束。"
+    "你可以从订单页面重新发起咨询，并明确说明要查询物流、咨询政策、申请退款"
+    "或进入 AI 深度处理。"
 )
 
 
@@ -70,7 +85,7 @@ def build_workflow(
         state: AgentState,
         runtime: Runtime[RunContext],
     ) -> dict[str, object]:
-        """绑定当前用户，并从最新消息提取订单或政策查询意图。"""
+        """绑定当前用户，并从最新消息提取可澄清的结构化售后意图。"""
 
         owner_user_id = state.get("owner_user_id")
         if owner_user_id is not None and owner_user_id != runtime.context.user_id:
@@ -85,14 +100,19 @@ def build_workflow(
             "policy_query"
         )
         pending_refund_request = state.get("pending_refund_request", False)
+        clarification_attempts = state.get("intent_clarification_attempts", 0)
         interpretation_context = InterpretationContext(
             previous_policy_query=previous_policy_query,
             pending_refund_request=pending_refund_request,
+            pending_intent_clarification=(
+                state.get("status") == "awaiting_intent_clarification"
+            ),
         )
         interpretation = dependencies.interpreter.interpret(
             _latest_user_text(state),
             interpretation_context,
         )
+        explicit_order_id = extract_explicit_order_id(_latest_user_text(state))
         interpreted_intent = (
             "unsupported_write"
             if (
@@ -121,26 +141,46 @@ def build_workflow(
             if continuing_order_inquiry
             else interpreted_intent
         )
+        interpreted_order_id = interpretation.order_id
+        if runtime.context.bound_order_id is not None:
+            if explicit_order_id is None and intent in {
+                "order_inquiry",
+                "service_guidance",
+                "refund_request",
+                "l2_support_request",
+            }:
+                interpreted_order_id = runtime.context.bound_order_id
+            elif explicit_order_id == runtime.context.bound_order_id:
+                interpreted_order_id = runtime.context.bound_order_id
         if intent not in {
             "order_inquiry",
             "policy_inquiry",
+            "service_guidance",
             "refund_request",
             "l2_support_request",
             "unsupported_write",
+            "unknown",
         }:
             raise ValueError("对不起，当前无法识别您的意图，请咨询和订单相关的问题")
         return {
             "owner_user_id": owner_user_id or runtime.context.user_id,
             "owner_workspace_id": (owner_workspace_id or runtime.context.workspace_id),
             "intent": intent,
+            "intent_clarification_attempts": (
+                clarification_attempts if intent == "unknown" else 0
+            ),
             "order_id": (
-                interpretation.order_id or state.get("order_id")
+                interpreted_order_id or state.get("order_id")
                 if continuing_refund_request
-                else interpretation.order_id
+                else interpreted_order_id
             ),
             "order": None,
             "shipment": None,
             "policy_query": interpretation.policy_query,
+            "service_concerns": interpretation.concerns,
+            "service_goal_summary": interpretation.goal_summary,
+            "service_resolution": None,
+            "guidance_policy_claims": (),
             "pending_policy_query": None,
             "policy_evidence_refs": (),
             "selected_policy_fact_ids": (),
@@ -158,7 +198,7 @@ def build_workflow(
                 L2RuntimeState(
                     phase="awaiting_confirmation",
                     issue_summary=interpretation.l2_issue_summary,
-                    related_order_id=interpretation.order_id,
+                    related_order_id=interpreted_order_id,
                     latest_user_input=interpretation.l2_issue_summary,
                 )
                 if intent == "l2_support_request"
@@ -172,24 +212,61 @@ def build_workflow(
     def route_after_interpret(
         state: AgentState,
     ) -> Literal[
+        "clarify_intent",
+        "respond_intent_fallback",
         "respond_unsupported",
         "prepare_policy_query",
+        "prepare_service_guidance",
         "prepare_refund_request",
         "l2_prepare_upgrade",
         "request_order_id",
         "query_order",
     ]:
-        """根据结构化意图和订单号选择安全处理路径。"""
+        """根据结构化意图、澄清次数和订单号选择安全处理路径。"""
 
+        if state["intent"] == "unknown":
+            if (
+                state.get("intent_clarification_attempts", 0)
+                >= MAX_INTENT_CLARIFICATION_ATTEMPTS
+            ):
+                return "respond_intent_fallback"
+            return "clarify_intent"
         if state["intent"] == "unsupported_write":
             return "respond_unsupported"
         if state["intent"] == "policy_inquiry":
             return "prepare_policy_query"
+        if state["intent"] == "service_guidance":
+            return "prepare_service_guidance"
         if state["intent"] == "refund_request":
             return "prepare_refund_request"
         if state["intent"] == "l2_support_request":
             return "l2_prepare_upgrade"
         return "query_order" if state.get("order_id") else "request_order_id"
+
+    def clarify_intent(state: AgentState) -> dict[str, object]:
+        """输出当前轮澄清问题、增加持久化次数并等待下一条用户消息。"""
+
+        attempts = state.get("intent_clarification_attempts", 0)
+        message = INTENT_CLARIFICATION_MESSAGES[attempts]
+        next_attempts = attempts + 1
+        return {
+            "messages": [{"role": "assistant", "content": message}],
+            "status": "awaiting_intent_clarification",
+            "intent_clarification_attempts": next_attempts,
+            "error_code": None,
+            "audit": [f"intent_clarification:{next_attempts}"],
+        }
+
+    def respond_intent_fallback(state: AgentState) -> dict[str, object]:
+        """达到澄清上限后输出兜底话术，并清空本次澄清计数。"""
+
+        return {
+            "messages": [{"role": "assistant", "content": INTENT_FALLBACK_MESSAGE}],
+            "status": "intent_unresolved",
+            "intent_clarification_attempts": 0,
+            "error_code": "intent_unresolved",
+            "audit": ["responded:intent_unresolved"],
+        }
 
     def request_order_id(state: AgentState) -> dict[str, object]:
         """请求用户补充订单号，并正常结束当前一轮。"""
@@ -315,7 +392,7 @@ def build_workflow(
         }
 
     def respond_unsupported(state: AgentState) -> dict[str, object]:
-        """明确拒绝 v0.1 尚未支持的业务写操作。"""
+        """用当前产品能力边界拒绝已识别但尚未支持的业务写操作。"""
 
         return {
             "messages": [{"role": "assistant", "content": UNSUPPORTED_WRITE_MESSAGE}],
@@ -341,6 +418,8 @@ def build_workflow(
 
     builder = StateGraph(AgentState, context_schema=RunContext)
     builder.add_node("bind_and_interpret", bind_and_interpret)
+    builder.add_node("clarify_intent", clarify_intent)
+    builder.add_node("respond_intent_fallback", respond_intent_fallback)
     builder.add_node("request_order_id", request_order_id)
     builder.add_node("query_order", query_order)
     builder.add_node("query_shipment", query_shipment)
@@ -349,6 +428,7 @@ def build_workflow(
     builder.add_node("respond_unsupported", respond_unsupported)
     builder.add_node("respond_success", respond_success)
     register_policy_workflow(builder, dependencies)
+    register_service_guidance_workflow(builder, dependencies)
     register_refund_workflow(builder, dependencies)
     if dependencies.l2 is not None:
         register_l2_workflow(builder, dependencies)
@@ -363,6 +443,8 @@ def build_workflow(
         builder.add_edge("l2_prepare_upgrade", END)
     builder.add_edge(START, "bind_and_interpret")
     builder.add_conditional_edges("bind_and_interpret", route_after_interpret)
+    builder.add_edge("clarify_intent", END)
+    builder.add_edge("respond_intent_fallback", END)
     builder.add_edge("request_order_id", END)
     builder.add_conditional_edges("query_order", route_after_order)
     builder.add_conditional_edges("query_shipment", route_after_shipment)

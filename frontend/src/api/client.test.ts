@@ -7,9 +7,9 @@ import {
 } from "./client";
 
 const sessionPayload = {
-  mode: "guest" as const,
+  mode: "registered" as const,
   username: null,
-  session_scope: "browser" as const,
+  session_scope: "account" as const,
   csrf_token: "csrf-memory-only",
   expires_at: "2026-07-17T12:00:00Z",
   capabilities: {
@@ -44,11 +44,14 @@ describe("API Client", () => {
       );
 
     await getSession();
-    await createConversation();
+    await createConversation("CR-7X2P-9K3M");
 
     const request = fetchMock.mock.calls[1];
     const headers = new Headers(request[1]?.headers);
     expect(headers.get("X-CSRF-Token")).toBe("csrf-memory-only");
+    expect(JSON.parse(String(request[1]?.body))).toEqual({
+      related_order_id: "CR-7X2P-9K3M",
+    });
     expect(localStorage.length).toBe(0);
   });
 

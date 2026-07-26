@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-import re
 import tempfile
 from pathlib import Path
 
 from commerce_resolve.adapters.fake import FakeQueryInterpreter
 from commerce_resolve.adapters.fake_l2_agent import ScriptedL2Agent
+from commerce_resolve.adapters.sqlite_admin import SqliteAdminRepository
 from commerce_resolve.adapters.sqlite_business import (
     SqliteBusinessRepository,
     create_business_engine,
@@ -30,6 +30,7 @@ from commerce_resolve.models import (
     InterpretationContext,
     RefundReason,
 )
+from commerce_resolve.order_context import extract_explicit_order_id
 from commerce_resolve.web.app import create_app
 from commerce_resolve.web.dependencies import WebServices
 from commerce_resolve.web.settings import WebSettings
@@ -54,23 +55,30 @@ class E2EInterpreter:
     ) -> Interpretation:
         """识别自定义订单号，并委托既有规则解释政策问题。"""
 
-        match = re.search(r"\bORD-[A-Z0-9-]{3,32}\b", text, re.IGNORECASE)
-        if any(keyword in text for keyword in ("二线客服", "升级处理", "复杂售后")):
+        order_id = extract_explicit_order_id(text)
+        if any(
+            keyword in text
+            for keyword in ("二线客服", "深度处理", "升级处理", "复杂售后")
+        ):
             return Interpretation(
                 intent="l2_support_request",
-                order_id=match.group(0).upper() if match is not None else None,
+                order_id=order_id,
                 l2_issue_summary=text[:500],
             )
-        if match is not None:
+        if "退款" in text and any(
+            keyword in text for keyword in ("物流", "快递", "到哪", "送到")
+        ):
+            return self._policy.interpret(text, context)
+        if order_id is not None:
             if "退款" in text:
                 return Interpretation(
                     intent="refund_request",
-                    order_id=match.group(0).upper(),
+                    order_id=order_id,
                     refund_reason=RefundReason(code="quality_issue"),
                 )
             return Interpretation(
                 intent="order_inquiry",
-                order_id=match.group(0).upper(),
+                order_id=order_id,
             )
         return self._policy.interpret(text, context)
 
@@ -108,7 +116,7 @@ def build_e2e_app():
         policy_index_db_path=policy_database,
         memory_db_path=memory_database,
         frontend_dist_path=PROJECT_ROOT / "frontend" / "dist",
-        allowed_origins=("http://127.0.0.1:8000",),
+        allowed_origins=("http://127.0.0.1:8011",),
     )
     order_id = "ORD-E2E-001"
     l2_agent = ScriptedL2Agent(
@@ -151,6 +159,13 @@ def build_e2e_app():
 
         invitation = repository.create_invitation(expires_in_hours=1)
         return {"code": invitation.code}
+
+    @application.post("/api/test/admin/{username}", include_in_schema=False)
+    def grant_test_admin(username: str) -> dict[str, str]:
+        """只在隔离 E2E 进程中把既有测试账号授予管理员。"""
+
+        account = SqliteAdminRepository(engine).set_role(username, "admin")
+        return {"username": account.username, "role": account.role}
 
     register_spa_routes(application, settings.frontend_dist_path)
     return application

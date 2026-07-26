@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 from typing import Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -10,10 +10,17 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 Intent = Literal[
     "order_inquiry",
     "policy_inquiry",
+    "service_guidance",
     "refund_request",
     "l2_support_request",
     "unsupported_write",
     "unknown",
+]
+ServiceConcern = Literal[
+    "order_status",
+    "shipment_status",
+    "policy",
+    "refund_eligibility",
 ]
 ToolOutcome = Literal["found", "unavailable", "temporarily_failed"]
 OrderStatus = Literal["processing", "shipped", "delivered", "cancelled"]
@@ -73,6 +80,7 @@ class InterpretationContext(BaseModel):
 
     previous_policy_query: PolicyQuery | None = None
     pending_refund_request: bool = False
+    pending_intent_clarification: bool = False
 
 
 class RefundReason(BaseModel):
@@ -105,17 +113,36 @@ class Interpretation(BaseModel):
     intent: Intent
     order_id: str | None = None
     policy_query: PolicyQuery | None = None
+    concerns: tuple[ServiceConcern, ...] = Field(default=(), max_length=4)
+    goal_summary: str | None = Field(default=None, max_length=500)
     refund_reason: RefundReason | None = None
     l2_issue_summary: str | None = Field(default=None, max_length=500)
 
     @model_validator(mode="after")
     def validate_policy_query_matches_intent(self) -> Self:
-        """确保政策查询、退款原因和 L2 摘要只出现在对应意图中。"""
+        """确保意图专属字段一致，并限制组合咨询至少包含两个关注点。"""
 
-        if self.intent == "policy_inquiry" and self.policy_query is None:
+        if self.intent in {"policy_inquiry", "service_guidance"} and (
+            self.policy_query is None
+            and (
+                self.intent == "policy_inquiry"
+                or "policy" in self.concerns
+                or "refund_eligibility" in self.concerns
+            )
+        ):
             raise ValueError("policy inquiries require policy_query")
-        if self.intent != "policy_inquiry" and self.policy_query is not None:
+        if (
+            self.intent not in {"policy_inquiry", "service_guidance"}
+            and self.policy_query is not None
+        ):
             raise ValueError("non-policy inquiries cannot include policy_query")
+        if self.intent == "service_guidance":
+            if len(set(self.concerns)) < 2:
+                raise ValueError("service guidance requires at least two concerns")
+            if not self.goal_summary or not self.goal_summary.strip():
+                raise ValueError("service guidance requires goal_summary")
+        elif self.concerns or self.goal_summary is not None:
+            raise ValueError("non-guidance inquiries cannot include guidance fields")
         if self.intent != "refund_request" and self.refund_reason is not None:
             raise ValueError("non-refund inquiries cannot include refund_reason")
         if self.intent == "l2_support_request" and not (
@@ -157,6 +184,8 @@ class RefundContext(BaseModel):
     order_status: OrderStatus
     shipment_status: ShipmentStatus | None = None
     shipment_last_event: str | None = None
+    shipment_updated_at: datetime | None = None
+    evaluated_at: datetime | None = None
     payment_id: str | None = None
     paid_amount_minor: int = Field(default=0, ge=0)
     currency: Literal["CNY"] | None = None

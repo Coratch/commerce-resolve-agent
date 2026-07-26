@@ -27,6 +27,7 @@ class AccessPrincipal(BaseModel):
     workspace_id: str
     mode: Literal["guest", "registered"]
     llm_allowed: bool
+    role: Literal["customer", "admin"] | None = None
 
     def to_business_scope(self) -> BusinessScope:
         """转换为 Gateway 使用且不含认证凭证的业务作用域。"""

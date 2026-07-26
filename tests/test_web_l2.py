@@ -27,10 +27,10 @@ def _private_order(
 ) -> None:
     """创建当前账号的私有订单，并按需增加可退款 Mock 支付。"""
 
-    created = harness.client.post(
-        "/api/orders",
-        headers=headers,
-        json={
+    username = harness.current_username()
+    harness.seed_order(
+        username,
+        {
             "order_id": order_id,
             "status": "processing" if with_payment else "shipped",
             "shipment": {
@@ -39,27 +39,28 @@ def _private_order(
             },
         },
     )
-    assert created.status_code == 201
     if with_payment:
-        payment = harness.client.put(
-            f"/api/orders/{order_id}/payment",
-            headers=headers,
-            json={
+        harness.seed_payment(
+            username,
+            order_id,
+            {
                 "amount": "88.00",
                 "currency": "CNY",
                 "channel": "mock_card",
                 "status": "settled",
             },
         )
-        assert payment.status_code == 200
 
 
-def _conversation(harness: WebHarness, headers: dict[str, str]) -> str:
-    """创建当前账号有权访问的新 conversation。"""
+def _conversation(
+    harness: WebHarness,
+    headers: dict[str, str],
+    order_id: str | None = None,
+) -> str:
+    """创建或恢复当前账号指定订单的活动 conversation。"""
 
-    response = harness.client.post("/api/conversations", headers=headers)
-    assert response.status_code == 201
-    return str(response.json()["thread_id"])
+    response = harness.create_order_conversation(headers, order_id)
+    return str(response["thread_id"])
 
 
 def _request_upgrade(
@@ -107,8 +108,9 @@ def test_upgrade_cancel_has_zero_case_and_model_side_effects(
 
     session = web_harness.register_and_login("l2.cancel")
     headers = web_harness.mutation_headers(str(session["csrf_token"]))
-    thread_id = _conversation(web_harness, headers)
-    preview = _request_upgrade(web_harness, headers, thread_id, "ORD-NOT-NEEDED")
+    order_id = web_harness.first_order_id()
+    thread_id = _conversation(web_harness, headers, order_id)
+    preview = _request_upgrade(web_harness, headers, thread_id, order_id)
     repository = web_harness.services.require_l2_repository()
 
     pending = web_harness.client.get(f"/api/conversations/{thread_id}/pending-l2")
@@ -119,7 +121,7 @@ def test_upgrade_cancel_has_zero_case_and_model_side_effects(
     )
     result = web_harness.latest_public_response(thread_id)
 
-    assert preview["agent_identity"] == "AI 二线客服，并非真人"
+    assert preview["agent_identity"] == "AI 深度处理助手，并非真人"
     assert pending.json()["pending_action"] == "upgrade_confirmation"
     assert repository.count_cases() == repository.count_model_calls() == 0
     assert cancelled.status_code == 202
@@ -136,7 +138,7 @@ def test_confirmed_loop_uses_two_tools_and_exposes_authorized_trace(
     headers = web_harness.mutation_headers(str(session["csrf_token"]))
     order_id = "ORD-L2-TRACE"
     _private_order(web_harness, headers, order_id)
-    thread_id = _conversation(web_harness, headers)
+    thread_id = _conversation(web_harness, headers, order_id)
     agent = ScriptedL2Agent(
         (
             ToolCallDecision(
@@ -194,13 +196,10 @@ def test_confirmed_loop_uses_two_tools_and_exposes_authorized_trace(
         raise_server_exceptions=False,
     )
     try:
-        guest = relogin_client.get("/api/session").json()
+        relogin_client.get("/api/session")
         relogin = relogin_client.post(
             "/api/auth/login",
-            headers={
-                "Origin": ORIGIN,
-                "X-CSRF-Token": guest["csrf_token"],
-            },
+            headers={"Origin": ORIGIN},
             json={"username": "l2.trace", "password": PASSWORD},
         )
         relogin_page = relogin_client.get(
@@ -263,7 +262,7 @@ def test_waiting_user_message_resumes_l2_without_one_line_interpreter(
     headers = web_harness.mutation_headers(str(session["csrf_token"]))
     order_id = "ORD-L2-ASK"
     _private_order(web_harness, headers, order_id)
-    thread_id = _conversation(web_harness, headers)
+    thread_id = _conversation(web_harness, headers, order_id)
     agent = ScriptedL2Agent(
         (
             AskUserDecision(
@@ -290,6 +289,9 @@ def test_waiting_user_message_resumes_l2_without_one_line_interpreter(
         thread_id,
         str(preview["preview_id"]),
     )
+    pending = web_harness.client.get(
+        f"/api/conversations/{thread_id}/pending-l2"
+    ).json()
     calls_before = len(web_harness.interpreter.calls)
 
     resumed = web_harness.client.post(
@@ -299,6 +301,9 @@ def test_waiting_user_message_resumes_l2_without_one_line_interpreter(
     )
 
     assert waiting["l2_pending_action"] == "user_input"
+    assert pending["pending_action"] == "user_input"
+    assert pending["upgrade_preview"] is None
+    assert pending["memory_proposal"] is None
     assert resumed.status_code == 200
     assert resumed.json()["public_status"] == "l2_resolved"
     assert len(web_harness.interpreter.calls) == calls_before
@@ -311,7 +316,8 @@ def test_memory_requires_confirmation_and_supports_scoped_crud(
 
     session = web_harness.register_and_login("l2.memory")
     headers = web_harness.mutation_headers(str(session["csrf_token"]))
-    thread_id = _conversation(web_harness, headers)
+    order_id = web_harness.first_order_id()
+    thread_id = _conversation(web_harness, headers, order_id)
     agent = ScriptedL2Agent(
         (
             ProposeMemoryDecision(
@@ -328,7 +334,7 @@ def test_memory_requires_confirmation_and_supports_scoped_crud(
         )
     )
     web_harness.services.l2_agent_factory = lambda: agent
-    preview = _request_upgrade(web_harness, headers, thread_id, "ORD-MEMORY")
+    preview = _request_upgrade(web_harness, headers, thread_id, order_id)
     _, waiting = _confirm_upgrade(
         web_harness,
         headers,
@@ -373,7 +379,7 @@ def test_l2_refund_candidate_reuses_existing_approval_and_is_idempotent(
     headers = web_harness.mutation_headers(str(session["csrf_token"]))
     order_id = "ORD-L2-REFUND"
     _private_order(web_harness, headers, order_id, with_payment=True)
-    thread_id = _conversation(web_harness, headers)
+    thread_id = _conversation(web_harness, headers, order_id)
     agent = ScriptedL2Agent(
         (
             ProposeRefundDecision(

@@ -1,10 +1,10 @@
 import type {
-  PublicL2CaseMetrics,
   PublicL2CaseSummary,
   PublicL2TraceEvent,
   PublicL2UpgradePreview,
   PublicMemoryProposal,
 } from "../../api/types";
+import { customerFacingText } from "../support/customerCopy";
 import styles from "./L2Cards.module.css";
 
 interface UpgradeCardProps {
@@ -22,7 +22,6 @@ interface MemoryCardProps {
 interface CasePanelProps {
   summary: PublicL2CaseSummary;
   events: PublicL2TraceEvent[];
-  metrics?: PublicL2CaseMetrics;
   cases: PublicL2CaseSummary[];
   hasMore: boolean;
   loadingMore: boolean;
@@ -31,34 +30,106 @@ interface CasePanelProps {
   onLoadMore: () => void;
 }
 
-/** 展示 AI 身份、允许读取的上下文和固定步骤预算。 */
+const CASE_STATUS_LABELS: Record<string, string> = {
+  l2_running: "处理中",
+  l2_resolved: "已完成",
+  awaiting_tool_approval: "等待确认",
+  awaiting_memory_approval: "等待偏好确认",
+  stopped: "已停止",
+  failed: "暂未完成",
+  cancelled: "已取消",
+};
+
+const EVENT_LABELS: Record<string, string> = {
+  "context.prepared": "已准备相关订单与服务信息",
+  "model.started": "正在分析问题",
+  "model.completed": "已生成处理建议",
+  "tool.started": "正在核对业务状态",
+  "tool.completed": "已完成业务核对",
+  "answer.completed": "已形成处理结论",
+  "case.completed": "本次处理已完成",
+  "case.stopped": "本次处理已停止",
+  case_created: "已创建二线服务",
+  context_loaded: "已读取会话与订单信息",
+  context_prepared: "已准备相关订单与服务信息",
+  model_decision: "已完成服务判断",
+  tool_result: "已完成业务核对",
+  user_input_received: "已收到补充信息",
+  memory_decision: "已处理服务偏好",
+  refund_proposed: "已生成退款建议",
+  refund_result: "已核对退款结果",
+  case_completed: "本次处理已完成",
+};
+
+const SOURCE_LABELS: Record<string, string> = {
+  business_observation: "订单与服务状态",
+  policy_document: "售后政策",
+  confirmed_memory: "已确认服务偏好",
+  conversation: "当前对话",
+};
+
+const MEMORY_TYPE_LABELS: Record<string, string> = {
+  preferred_language: "回复语言",
+  response_detail: "回复详细程度",
+  communication_tone: "沟通语气",
+};
+
+const MEMORY_VALUE_LABELS: Record<string, string> = {
+  "zh-CN": "中文",
+  en: "英文",
+  concise: "简洁",
+  standard: "标准",
+  detailed: "详细",
+  neutral: "中性",
+  friendly: "友好",
+};
+
+/** 将内部 Case 状态转换为客户可以理解的服务状态。 */
+function caseStatusLabel(status: string): string {
+  return CASE_STATUS_LABELS[status] ?? "处理中";
+}
+
+/** 将内部轨迹事件转换为不暴露实现细节的处理说明。 */
+function eventLabel(eventType: string): string {
+  return EVENT_LABELS[eventType] ?? "已更新处理进度";
+}
+
+/** 将上下文来源类型转换为客户可以理解的证据类别。 */
+function sourceLabel(sourceType: string): string {
+  return SOURCE_LABELS[sourceType] ?? "相关服务信息";
+}
+
+/** 展示 AI 身份和受控服务边界，不公开内部工具名称或预算指标。 */
 export function L2UpgradeCard({
   preview,
   pending,
   onDecision,
 }: UpgradeCardProps) {
   return (
-    <aside className={styles.card} aria-label="AI 二线客服升级预览">
-      <span className={styles.label}>L2 · AI SUPPORT</span>
-      <h2>{preview.agent_identity}</h2>
-      <p>{preview.issue_summary}</p>
+    <aside className={styles.card} aria-label="AI 售后处理确认">
+      <span className={styles.label}>AI 售后助手</span>
+      <h2>需要进一步核对</h2>
       <dl>
         <div>
-          <dt>可用工具</dt>
-          <dd>{preview.allowed_tools.join("、")}</dd>
+          <dt>本次问题</dt>
+          <dd>{customerFacingText(preview.issue_summary)}</dd>
         </div>
         <div>
-          <dt>最大步骤</dt>
-          <dd>{preview.max_steps}</dd>
+          <dt>核对范围</dt>
+          <dd>订单、物流、退款状态与售后政策核对</dd>
         </div>
         <div>
-          <dt>长期偏好</dt>
-          <dd>{preview.reads_confirmed_preferences ? "读取已确认偏好" : "不读取"}</dd>
+          <dt>处理方式</dt>
+          <dd>逐步核对并可能继续向你询问补充信息</dd>
+        </div>
+        <div>
+          <dt>身份说明</dt>
+          <dd>AI 售后助手，不是真人客服；退款仍会单独确认</dd>
         </div>
       </dl>
       <div className={styles.actions}>
         <button type="button" disabled={pending} onClick={() => onDecision("cancel")}>
-          取消升级
+          暂不继续
         </button>
         <button
           type="button"
@@ -66,7 +137,7 @@ export function L2UpgradeCard({
           disabled={pending}
           onClick={() => onDecision("confirm")}
         >
-          确认进入 AI 二线
+          由 AI 继续处理
         </button>
       </div>
     </aside>
@@ -81,10 +152,11 @@ export function MemoryProposalCard({
 }: MemoryCardProps) {
   return (
     <aside className={styles.card} aria-label="长期偏好建议">
-      <span className={styles.label}>MEMORY PROPOSAL</span>
+      <span className={styles.label}>服务偏好建议</span>
       <h2>是否保存这条偏好？</h2>
       <p>
-        {proposal.memory_type} = <strong>{proposal.value}</strong>
+        {MEMORY_TYPE_LABELS[proposal.memory_type] ?? "服务偏好"}：
+        <strong>{MEMORY_VALUE_LABELS[proposal.value] ?? proposal.value}</strong>
       </p>
       <small>{proposal.purpose}</small>
       <div className={styles.actions}>
@@ -104,11 +176,10 @@ export function MemoryProposalCard({
   );
 }
 
-/** 展示当前 Case 的公开预算用量和不含隐藏推理的动作轨迹。 */
+/** 展示不含工具、模型、Token 和内部错误码的客户侧处理记录。 */
 export function L2CasePanel({
   summary,
   events,
-  metrics,
   cases,
   hasMore,
   loadingMore,
@@ -117,72 +188,62 @@ export function L2CasePanel({
   onLoadMore,
 }: CasePanelProps) {
   return (
-    <aside className={styles.panel} aria-label="AI 二线 Case 状态">
+    <aside className={styles.panel} aria-label="AI 深度处理记录">
       <div className={styles.panelHeader}>
         <div>
-          <span className={styles.label}>AI L2 CASE</span>
-          <h2>{summary.status}</h2>
+          <span className={styles.label}>AI 深度处理记录</span>
+          <h2>{caseStatusLabel(summary.status)}</h2>
         </div>
-        <p>
-          {summary.steps_used} 步 · {summary.model_calls_used} 次模型 ·{" "}
-          {summary.tool_calls_used} 次工具
-        </p>
+        <p>{customerFacingText(summary.issue_summary)}</p>
       </div>
       {cases.length > 1 && (
         <label className={styles.caseSelector}>
-          历史 Case
+          历史服务记录
           <select
             value={summary.case_id}
             onChange={(event) => onCaseChange(event.target.value)}
           >
             {cases.map((item) => (
               <option key={item.case_id} value={item.case_id}>
-                {item.issue_summary} · {item.status}
+                {customerFacingText(item.issue_summary)} ·{" "}
+                {caseStatusLabel(item.status)}
               </option>
             ))}
           </select>
         </label>
       )}
       {summary.trace_state === "partial" && (
-        <p className={styles.traceNotice}>早期 Case 仅有部分处理记录。</p>
+        <p className={styles.traceNotice}>早期服务仅保留了部分处理记录。</p>
       )}
       {summary.failure_attribution !== null &&
         summary.failure_attribution !== undefined && (
           <p className={styles.traceNotice}>
-            停止归因：{summary.failure_attribution}
+            本次处理未完整结束，你可以重新描述问题后继续咨询。
           </p>
         )}
-      {metrics !== undefined && (
-        <p className={styles.metrics}>
-          上下文 {metrics.selected_count}/{metrics.candidate_count} 项 · 输入{" "}
-          {metrics.provider_input_tokens} Token · 上下文准备{" "}
-          {metrics.context_duration_ms} ms
-        </p>
-      )}
       <ol>
         {events.map((event) => (
           <li key={event.sequence_no}>
             <div>
-              <strong>{event.event_type}</strong>
+              <strong>{eventLabel(event.event_type)}</strong>
               {event.context_summary !== null &&
                 event.context_summary !== undefined && (
                   <details>
-                    <summary>处理依据</summary>
+                    <summary>查看处理依据</summary>
                     <small>
-                      {event.context_summary.source_types.join("、") || "基础上下文"} ·{" "}
-                      {event.context_summary.selected_count} 项
+                      {event.context_summary.source_types
+                        .map(sourceLabel)
+                        .join("、") || "基础服务信息"}{" "}
+                      · 已读取 {event.context_summary.selected_count} 项信息
                       {event.context_summary.facts_refreshed > 0
-                        ? ` · 刷新 ${event.context_summary.facts_refreshed} 项`
+                        ? " · 已同步最新状态"
                         : ""}
-                      {event.context_summary.truncated ? " · 已裁剪" : ""}
+                      {event.context_summary.truncated ? " · 已控制展示范围" : ""}
                     </small>
                   </details>
                 )}
             </div>
-            <span>
-              #{event.sequence_no} · {event.tool_category ?? "Harness"} ·{" "}
-              {event.result_code}
-            </span>
+            <span>第 {event.sequence_no} 步</span>
           </li>
         ))}
       </ol>

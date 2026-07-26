@@ -23,19 +23,24 @@ from commerce_resolve.models import (
     RefundPreview,
     RefundReason,
     RefundVerification,
+    ServiceConcern,
     ShipmentView,
 )
+from commerce_resolve.service_resolution import ServiceResolution
 
 
 class AgentState(MessagesState, total=False):
-    """保存订单与政策查询中的可持久化事实、状态和审计轨迹。"""
+    """保存售后意图澄清、业务事实、任务状态和审计轨迹。"""
 
     owner_user_id: str
     owner_workspace_id: str
     intent: Intent
+    intent_clarification_attempts: int
     order_id: str | None
     status: Literal[
         "awaiting_order_id",
+        "awaiting_intent_clarification",
+        "intent_unresolved",
         "completed",
         "order_unavailable",
         "temporarily_failed",
@@ -44,6 +49,9 @@ class AgentState(MessagesState, total=False):
         "awaiting_policy_context",
         "policy_insufficient_evidence",
         "policy_conflict",
+        "service_guidance_completed",
+        "service_guidance_needs_input",
+        "service_guidance_incomplete",
         "awaiting_refund_context",
         "refund_ineligible",
         "refund_awaiting_approval",
@@ -67,6 +75,10 @@ class AgentState(MessagesState, total=False):
     order: OrderView | None
     shipment: ShipmentView | None
     policy_query: PolicyQuery | None
+    service_concerns: tuple[ServiceConcern, ...]
+    service_goal_summary: str | None
+    service_resolution: ServiceResolution | None
+    guidance_policy_claims: tuple[str, ...]
     pending_policy_query: PolicyQuery | None
     policy_evidence_refs: tuple[PolicyEvidenceRef, ...]
     selected_policy_fact_ids: tuple[str, ...]
@@ -101,3 +113,4 @@ class RunContext:
     subject_id: str | None = None
     l2_allowed: bool = False
     l2_quota_remaining: int = 0
+    bound_order_id: str | None = None

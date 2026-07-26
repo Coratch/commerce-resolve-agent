@@ -17,6 +17,7 @@ from uuid import uuid4
 
 from commerce_resolve.eval_catalog import (
     EvalSuiteAdapter,
+    active_release_adapters,
     build_eval_catalog,
     content_hash,
     registered_adapters,
@@ -33,18 +34,31 @@ from commerce_resolve.eval_models import (
 
 EVAL_SCHEMA_VERSION = "1.0"
 OFFLINE_PROFILE_ID = "offline-release"
-OFFLINE_PROFILE_VERSION = "v0.8.0"
+OFFLINE_PROFILE_VERSION = "v2.0"
 DEFAULT_RUN_ROOT = Path("var/eval/runs")
 SOURCE_PATHS = (
     "src",
     "tests",
     "frontend/src",
     "frontend/e2e",
+    "frontend/public/catalog",
+    "frontend/vite.config.ts",
+    "frontend/tsconfig.json",
+    "frontend/tsconfig.app.json",
+    "frontend/tsconfig.node.json",
     "migrations",
+    "data/demo",
     "data/policies",
     "data/eval",
+    "data/operations",
+    "deploy",
+    "Dockerfile",
+    "compose.yaml",
+    ".dockerignore",
+    ".env.deploy.example",
     "pyproject.toml",
     "requirements.lock",
+    "requirements.runtime.lock",
     "frontend/package.json",
     "frontend/package-lock.json",
 )
@@ -126,7 +140,11 @@ def dependency_fingerprints(project_root: Path) -> dict[str, str]:
     """计算后端和前端锁文件摘要，不保存本机路径。"""
 
     result: dict[str, str] = {}
-    for relative in ("requirements.lock", "frontend/package-lock.json"):
+    for relative in (
+        "requirements.lock",
+        "requirements.runtime.lock",
+        "frontend/package-lock.json",
+    ):
         path = project_root / relative
         if path.is_file():
             result[relative] = _sha256_bytes(path.read_bytes())
@@ -246,9 +264,9 @@ def build_run_manifest(
         dependency_fingerprints=dependency_fingerprints(project_root),
         model_provider="fake",
         model_name="deterministic-fakes",
-        prompt_version="offline-fixtures-v0.8",
+        prompt_version="offline-fixtures-v1.0",
         schema_contract_version=EVAL_SCHEMA_VERSION,
-        toolset_version="offline-tools-v0.8",
+        toolset_version="offline-tools-v1.0",
         policy_version="accepted-product-policies-v0.7",
         context_version="context-policy-v0.7",
         migration_head=_migration_head(project_root),
@@ -321,11 +339,11 @@ def run_offline_evaluation(
 ) -> EvalRunReport:
     """按显式稳定顺序运行统一离线 Suite，并返回规范化报告。"""
 
-    available = registered_adapters()
     requested = tuple(suite_versions or ("all",))
     if requested == ("all",):
-        selected = available
+        selected = active_release_adapters()
     else:
+        available = registered_adapters()
         selected = tuple(
             adapter for adapter in available if adapter.suite_version in requested
         )

@@ -48,6 +48,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     parser = argparse.ArgumentParser(prog="commerce-resolve")
     subparsers = parser.add_subparsers(dest="command", required=True)
+    from commerce_resolve.operations.cli import add_operations_parser
+
+    add_operations_parser(subparsers)
     ask = subparsers.add_parser("ask", help="submit an order inquiry")
     ask.add_argument("message", help="customer message")
     ask.add_argument("--thread-id", required=True, help="conversation thread")
@@ -73,6 +76,13 @@ def build_parser() -> argparse.ArgumentParser:
             "v0.6",
             "v0.7",
             "v0.8",
+            "v1.0",
+            "v1.1",
+            "v1.2",
+            "v1.3",
+            "v1.3.1",
+            "v1.3.2",
+            "v2.0",
             "all",
         ),
         dest="legacy_eval_suite",
@@ -96,6 +106,13 @@ def build_parser() -> argparse.ArgumentParser:
             "v0.6",
             "v0.7",
             "v0.8",
+            "v1.0",
+            "v1.1",
+            "v1.2",
+            "v1.3",
+            "v1.3.1",
+            "v1.3.2",
+            "v2.0",
             "all",
         ),
         dest="eval_suites",
@@ -120,7 +137,7 @@ def build_parser() -> argparse.ArgumentParser:
     eval_qualify.add_argument(
         "--dataset",
         type=Path,
-        default=Path("data/eval/provider-qualification-v1.json"),
+        default=Path("data/eval/v2.0/provider-qualification.json"),
     )
     eval_qualify.add_argument("--repetitions", type=int, default=2)
     eval_qualify.add_argument(
@@ -204,6 +221,46 @@ def build_parser() -> argparse.ArgumentParser:
         help="revoke an invitation by its public id",
     )
     revoke_invitation.add_argument("--invite-id", required=True)
+    admin = subparsers.add_parser(
+        "admin",
+        help="manage the trusted local administrator role",
+    )
+    admin_commands = admin.add_subparsers(dest="admin_command", required=True)
+    admin_grant = admin_commands.add_parser(
+        "grant",
+        help="grant administrator role to an existing account",
+    )
+    admin_grant.add_argument("username")
+    admin_revoke = admin_commands.add_parser(
+        "revoke",
+        help="revoke administrator role from an existing account",
+    )
+    admin_revoke.add_argument("username")
+    admin_commands.add_parser("list", help="list account roles without credentials")
+    demo_catalog = subparsers.add_parser(
+        "demo-catalog",
+        help="validate or seed the versioned local demo catalog",
+    )
+    demo_catalog_commands = demo_catalog.add_subparsers(
+        dest="demo_catalog_command",
+        required=True,
+    )
+    validate_catalog = demo_catalog_commands.add_parser(
+        "validate",
+        help="validate products, scenarios and local asset hashes",
+    )
+    validate_catalog.add_argument("--version", default="v1.3")
+    seed_catalog = demo_catalog_commands.add_parser(
+        "seed",
+        help="idempotently seed the commercial service scenario set",
+    )
+    seed_catalog.add_argument("--version", default="v1.3")
+    seed_catalog.add_argument("--username", required=True)
+    seed_catalog.add_argument(
+        "--scenario-set",
+        choices=("commercial-service",),
+        default="commercial-service",
+    )
     serve = subparsers.add_parser("serve", help="run the single-instance Web app")
     serve.add_argument("--host")
     serve.add_argument("--port", type=int)
@@ -294,6 +351,95 @@ def _run_invitation_command(args: argparse.Namespace, database: Path) -> int:
         engine.dispose()
 
 
+def _run_admin_command(args: argparse.Namespace, database: Path) -> int:
+    """通过受控本机入口授予、撤销或查看账号角色。"""
+
+    from commerce_resolve.adapters.sqlite_admin import (
+        AdminDataError,
+        SqliteAdminRepository,
+    )
+
+    try:
+        repository, engine = _open_business_repository(database)
+    except RuntimeError as error:
+        print(str(error), file=sys.stderr)
+        return 2
+    admin_repository = SqliteAdminRepository(repository.engine)
+    try:
+        if args.admin_command == "list":
+            payload = [
+                {
+                    "username": item.username,
+                    "status": item.status,
+                    "role": item.role,
+                }
+                for item in admin_repository.list_customers()
+            ]
+            print(json.dumps(payload, ensure_ascii=False, indent=2))
+            return 0
+        role = "admin" if args.admin_command == "grant" else "customer"
+        account = admin_repository.set_role(args.username, role)
+        print(
+            json.dumps(
+                {
+                    "username": account.username,
+                    "status": account.status,
+                    "role": account.role,
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
+        return 0
+    except AdminDataError:
+        print("账号不存在或不可用。", file=sys.stderr)
+        return 1
+    finally:
+        engine.dispose()
+
+
+def _run_demo_catalog_command(
+    args: argparse.Namespace,
+    database: Path,
+) -> int:
+    """校验目录，或为显式账号幂等初始化全部商业化演示场景。"""
+
+    from commerce_resolve.demo_catalog import DemoCatalogError, DemoCatalogService
+
+    if args.demo_catalog_command == "validate":
+        try:
+            summary = DemoCatalogService(project_root=Path.cwd()).summary(args.version)
+        except DemoCatalogError as error:
+            print(f"目录校验失败：{error.error_code}", file=sys.stderr)
+            return 1
+        print(summary.model_dump_json(indent=2))
+        return 0
+    try:
+        repository, engine = _open_business_repository(database)
+    except RuntimeError as error:
+        print(str(error), file=sys.stderr)
+        return 2
+    del repository
+    try:
+        service = DemoCatalogService(project_root=Path.cwd(), engine=engine)
+        summary = service.summary(args.version)
+        results = [
+            service.seed_for_username(
+                username=args.username,
+                scenario_id=item.scenario_id,
+                version=args.version,
+            ).model_dump(mode="json")
+            for item in summary.scenarios
+        ]
+        print(json.dumps(results, ensure_ascii=False, indent=2))
+        return 0
+    except DemoCatalogError as error:
+        print(f"目录初始化失败：{error.error_code}", file=sys.stderr)
+        return 1
+    finally:
+        engine.dispose()
+
+
 def _run_web_server(
     args: argparse.Namespace,
     *,
@@ -307,8 +453,19 @@ def _run_web_server(
 
     import uvicorn
 
+    from commerce_resolve.operations.locking import (
+        InstanceLock,
+        InstanceLockUnavailable,
+    )
+    from commerce_resolve.operations.models import PreflightMode
+    from commerce_resolve.operations.preflight import (
+        report_json,
+        resolve_release_manifest,
+        run_preflight,
+    )
+    from commerce_resolve.structured_logging import configure_json_logging
     from commerce_resolve.web import create_app
-    from commerce_resolve.web.settings import WebSettings
+    from commerce_resolve.web.settings import DeploymentSettings, WebSettings
 
     settings = WebSettings.from_env()
     settings = replace(
@@ -321,17 +478,53 @@ def _run_web_server(
         host=args.host or settings.host,
         port=args.port or settings.port,
     )
+    deployment = DeploymentSettings.from_env(settings)
+    if not deployment.deployment:
+        try:
+            app = create_app(settings=settings)
+        except RuntimeError as error:
+            print(str(error), file=sys.stderr)
+            return 2
+        uvicorn.run(
+            app,
+            host=settings.host,
+            port=settings.port,
+            workers=1,
+        )
+        return 0
     try:
-        app = create_app(settings=settings)
-    except RuntimeError as error:
+        release = resolve_release_manifest(deployment, project_root=Path.cwd())
+        with InstanceLock(deployment.instance_lock_path):
+            report = run_preflight(
+                deployment,
+                PreflightMode.SERVE,
+                project_root=Path.cwd(),
+                lock_already_held=True,
+            )
+            if not report.passed:
+                print(report_json(report), file=sys.stderr)
+                return 3
+            configure_json_logging(deployment.log_level)
+            app = create_app(
+                settings=settings,
+                deployment_settings=deployment,
+                release_manifest=release,
+            )
+            uvicorn.run(
+                app,
+                host=settings.host,
+                port=settings.port,
+                workers=1,
+                timeout_graceful_shutdown=deployment.shutdown_grace_seconds,
+                access_log=False,
+                log_config=None,
+            )
+    except InstanceLockUnavailable:
+        print('{"error_code":"instance_lock_held"}', file=sys.stderr)
+        return 4
+    except (RuntimeError, ValueError) as error:
         print(str(error), file=sys.stderr)
         return 2
-    uvicorn.run(
-        app,
-        host=settings.host,
-        port=settings.port,
-        workers=1,
-    )
     return 0
 
 
@@ -417,6 +610,37 @@ def _run_versioned_eval(args: argparse.Namespace) -> int:
         "status": report.status,
         "result_fingerprint": report.result_fingerprint,
         "artifact": run_dir.as_posix(),
+    }
+    print(json.dumps(payload, ensure_ascii=False, indent=2))
+    return status_exit_code(report.status)
+
+
+def _run_current_release_eval() -> int:
+    """运行 v2.0 当前发布门禁，并显式列出不再阻断发布的历史 Suite。"""
+
+    from commerce_resolve.eval_catalog import ARCHIVED_SUITE_VERSIONS
+    from commerce_resolve.eval_runtime import (
+        run_offline_evaluation,
+        status_exit_code,
+    )
+
+    report = run_offline_evaluation(Path.cwd(), suite_versions=("all",))
+    payload = {
+        "suite": "all",
+        "profile_version": report.manifest.profile_version,
+        "passed": report.status == "passed",
+        "reports": {
+            suite.suite_version: {
+                "suite_id": suite.suite_id,
+                "total_scenarios": suite.total_scenarios,
+                "passed_scenarios": suite.passed_scenarios,
+                "passed": suite.passed,
+                "safety_violations": len(suite.safety_violations),
+            }
+            for suite in report.suites
+        },
+        "archived_suites": list(ARCHIVED_SUITE_VERSIONS),
+        "aggregate_metrics": report.aggregate_metrics,
     }
     print(json.dumps(payload, ensure_ascii=False, indent=2))
     return status_exit_code(report.status)
@@ -708,12 +932,33 @@ def main(
         load_dotenv(dotenv_path=DEFAULT_ENV_FILE, override=False)
     business_database = Path(business_db_path or DEFAULT_BUSINESS_DB)
     memory_database = Path(memory_db_path or DEFAULT_MEMORY_DB)
+    if args.command == "ops":
+        from commerce_resolve.operations.cli import run_operations_command
+        from commerce_resolve.web.settings import DeploymentSettings, WebSettings
+
+        web_settings = replace(
+            WebSettings.from_env(),
+            business_db_path=business_database,
+            checkpoint_db_path=Path(checkpoint_path or DEFAULT_CHECKPOINT_DB),
+            policy_source_path=Path(policy_source_path or DEFAULT_POLICY_SOURCE),
+            policy_index_db_path=Path(policy_index_path or DEFAULT_POLICY_INDEX_DB),
+            memory_db_path=memory_database,
+        )
+        return run_operations_command(
+            args,
+            DeploymentSettings.from_env(web_settings),
+            project_root=Path.cwd(),
+        )
     if args.command == "db":
         return _run_database_upgrade(business_database)
     if args.command == "memory":
         return _run_memory_setup(memory_database)
     if args.command == "invite":
         return _run_invitation_command(args, business_database)
+    if args.command == "admin":
+        return _run_admin_command(args, business_database)
+    if args.command == "demo-catalog":
+        return _run_demo_catalog_command(args, business_database)
     if args.command == "serve":
         return _run_web_server(
             args,
@@ -804,46 +1049,63 @@ def main(
             eval_system_report = run_eval_system_suite()
             print(eval_system_report.model_dump_json(indent=2))
             return 0 if eval_system_report.passed else 1
-        report = run_eval_suite()
-        policy_report = run_policy_eval_suite()
-        from commerce_resolve.conversation_evaluation import (
-            run_conversation_eval_suite,
-        )
-        from commerce_resolve.eval_system_evaluation import run_eval_system_suite
-        from commerce_resolve.refund_evaluation import run_refund_eval_suite
-        from commerce_resolve.web_evaluation import run_v03_eval_suite
+        if legacy_suite == "v1.0":
+            from commerce_resolve.operations_evaluation import (
+                run_operations_eval_suite,
+            )
 
-        web_report = run_v03_eval_suite()
-        refund_report = run_refund_eval_suite()
-        l2_report = run_l2_eval_suite()
-        conversation_report = run_conversation_eval_suite()
-        context_report = run_context_eval_suite()
-        eval_system_report = run_eval_system_suite()
-        combined = {
-            "suite": "all",
-            "passed": (
-                report.passed
-                and policy_report.passed
-                and web_report.passed
-                and refund_report.passed
-                and l2_report.passed
-                and conversation_report.passed
-                and context_report.passed
-                and eval_system_report.passed
-            ),
-            "reports": {
-                "v0.1": report.model_dump(mode="json"),
-                "v0.2": policy_report.model_dump(mode="json"),
-                "v0.3": web_report.model_dump(mode="json"),
-                "v0.4": refund_report.model_dump(mode="json"),
-                "v0.5": l2_report.model_dump(mode="json"),
-                "v0.6": conversation_report.model_dump(mode="json"),
-                "v0.7": context_report.model_dump(mode="json"),
-                "v0.8": eval_system_report.model_dump(mode="json"),
-            },
-        }
-        print(json.dumps(combined, ensure_ascii=False, indent=2))
-        return 0 if combined["passed"] else 1
+            operations_report = run_operations_eval_suite()
+            print(operations_report.model_dump_json(indent=2))
+            return 0 if operations_report.passed else 1
+        if legacy_suite == "v1.1":
+            from commerce_resolve.service_center_evaluation import (
+                run_service_center_eval_suite,
+            )
+
+            service_center_report = run_service_center_eval_suite()
+            print(service_center_report.model_dump_json(indent=2))
+            return 0 if service_center_report.passed else 1
+        if legacy_suite == "v1.2":
+            from commerce_resolve.admin_evaluation import (
+                run_admin_surface_eval_suite,
+            )
+
+            admin_surface_report = run_admin_surface_eval_suite()
+            print(admin_surface_report.model_dump_json(indent=2))
+            return 0 if admin_surface_report.passed else 1
+        if legacy_suite == "v1.3":
+            from commerce_resolve.commercial_experience_evaluation import (
+                run_commercial_experience_eval_suite,
+            )
+
+            commercial_report = run_commercial_experience_eval_suite()
+            print(commercial_report.model_dump_json(indent=2))
+            return 0 if commercial_report.passed else 1
+        if legacy_suite == "v1.3.1":
+            from commerce_resolve.commercial_credibility_evaluation import (
+                run_commercial_credibility_eval_suite,
+            )
+
+            credibility_report = run_commercial_credibility_eval_suite()
+            print(credibility_report.model_dump_json(indent=2))
+            return 0 if credibility_report.passed else 1
+        if legacy_suite == "v1.3.2":
+            from commerce_resolve.immersive_interface_evaluation import (
+                run_immersive_interface_eval_suite,
+            )
+
+            immersive_report = run_immersive_interface_eval_suite()
+            print(immersive_report.model_dump_json(indent=2))
+            return 0 if immersive_report.passed else 1
+        if legacy_suite == "v2.0":
+            from commerce_resolve.v20_product_evaluation import (
+                run_v20_product_eval_suite,
+            )
+
+            product_report = run_v20_product_eval_suite()
+            print(product_report.model_dump_json(indent=2))
+            return 0 if product_report.passed else 1
+        return _run_current_release_eval()
     database = Path(checkpoint_path or DEFAULT_CHECKPOINT_DB)
     database.parent.mkdir(parents=True, exist_ok=True)
     try:

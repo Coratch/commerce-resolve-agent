@@ -1,8 +1,26 @@
 import type { components } from "./generated";
 
 export type SessionResponse = components["schemas"]["SessionResponse"];
+export type AdminCustomer = components["schemas"]["AdminCustomer"];
+export type AdminInvitation = components["schemas"]["AdminInvitation"];
+export type AdminInvitationInput =
+  components["schemas"]["AdminInvitationCreateRequest"];
+export type AdminInvitationCreated = components["schemas"]["InvitationIssued"];
+export type AdminAuditRecord = components["schemas"]["AdminAuditRecord"];
+export type AdminRunSummary = components["schemas"]["AdminRunSummary"];
+export type AdminRunDetail = components["schemas"]["AdminRunDetail"];
+export type AdminEvalSnapshot = components["schemas"]["AdminEvalSnapshot"];
+export type AdminSystemSnapshot = components["schemas"]["AdminSystemSnapshot"];
+export type AdminOverview = components["schemas"]["AdminOverview"];
+export type DemoWorkspaceStatus =
+  components["schemas"]["DemoWorkspaceStatus"];
+export type WorkspaceResetResult =
+  components["schemas"]["WorkspaceResetResult"];
+export type ConversationResponse =
+  components["schemas"]["ConversationResponse"];
 export type PolicyCitation = components["schemas"]["PolicyCitation"];
 export type ChatResponse = components["schemas"]["ChatResponse"];
+export type ServiceResolution = components["schemas"]["ServiceResolution"];
 export type AgentRun = components["schemas"]["PublicAgentRun"];
 export type AgentRunResponse = components["schemas"]["AgentRunResponse"];
 export type RunAcceptedResponse = components["schemas"]["RunAcceptedResponse"];
@@ -12,12 +30,18 @@ export type ConversationListResponse =
   components["schemas"]["ConversationListResponse"];
 export type ConversationMessagesResponse =
   components["schemas"]["ConversationMessagesResponse"];
-export type ShipmentInput = components["schemas"]["ShipmentInput"];
-export type OrderInput = components["schemas"]["OrderCreate"];
-export type PublicOrder = components["schemas"]["PublicOrder"];
-export type MockPaymentInput = components["schemas"]["MockPaymentInput"];
-export type PublicPayment = components["schemas"]["PublicPayment"];
-export type PublicRefund = components["schemas"]["PublicRefund"];
+export type SupportOverview = components["schemas"]["SupportOverview"];
+export type SupportOrdersPage = components["schemas"]["SupportOrdersPage"];
+export type SupportOrderSummary = components["schemas"]["SupportOrderSummary"];
+export type SupportOrderDetail = components["schemas"]["SupportOrderDetail"];
+export type SupportOrderItem = components["schemas"]["SupportOrderItem"];
+export type SupportShipmentPackage =
+  components["schemas"]["SupportShipmentPackage"];
+export type SupportProductPreview =
+  components["schemas"]["SupportProductPreview"];
+export type SupportServicesPage = components["schemas"]["SupportServicesPage"];
+export type ServiceRecordSummary = components["schemas"]["ServiceRecordSummary"];
+export type ServiceRecordDetail = components["schemas"]["ServiceRecordDetail"];
 export type PublicRefundPreview = components["schemas"]["PublicRefundPreview"];
 export type PublicRefundResult = components["schemas"]["PublicRefundResult"];
 export type PendingRefundResponse = components["schemas"]["PendingRefundResponse"];
@@ -37,14 +61,6 @@ export type PublicCustomerPreference =
   components["schemas"]["PublicCustomerPreference"];
 export type MemoryValue = components["schemas"]["MemoryUpdateRequest"]["value"];
 export type AccessMode = SessionResponse["mode"];
-export type OrderStatus = OrderInput["status"];
-export type ShipmentStatus = ShipmentInput["status"];
-export type PaymentChannel = MockPaymentInput["channel"];
-export type PaymentStatus = MockPaymentInput["status"];
-export type OrderUpdate = Omit<
-  components["schemas"]["OrderUpdate"],
-  "remove_shipment"
-> & { remove_shipment?: boolean };
 
 export interface ApiErrorBody {
   error_code: string;

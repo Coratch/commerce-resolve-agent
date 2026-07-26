@@ -18,30 +18,26 @@ def _prepare_refundable_order(
 
     session = harness.register_and_login(username)
     headers = harness.mutation_headers(str(session["csrf_token"]))
-    created = harness.client.post(
-        "/api/orders",
-        headers=headers,
-        json={
+    harness.seed_order(
+        username,
+        {
             "order_id": order_id,
             "status": "processing",
             "shipment": {"status": "preparing", "last_event": "等待揽收"},
         },
     )
-    assert created.status_code == 201
-    payment = harness.client.put(
-        f"/api/orders/{order_id}/payment",
-        headers=headers,
-        json={
+    harness.seed_payment(
+        username,
+        order_id,
+        {
             "amount": "129.90",
             "currency": "CNY",
             "channel": "mock_card",
             "status": "settled",
         },
     )
-    assert payment.status_code == 200
-    conversation = harness.client.post("/api/conversations", headers=headers)
-    assert conversation.status_code == 201
-    return session, headers, str(conversation.json()["thread_id"])
+    conversation = harness.create_order_conversation(headers, order_id)
+    return session, headers, str(conversation["thread_id"])
 
 
 def _request_preview(
@@ -132,7 +128,7 @@ def test_approved_refund_is_verified_and_repeat_approval_is_idempotent(
     events = web_harness.client.get(
         f"/api/conversations/{thread_id}/runs/{approved.json()['run']['run_id']}/events"
     )
-    orders = web_harness.client.get("/api/orders").json()["orders"]
+    order = web_harness.client.get("/api/support/orders/ORD-REFUND-APPROVE").json()
 
     assert approved.status_code == repeated.status_code == 202
     assert result["public_status"] == "refund_completed"
@@ -143,8 +139,8 @@ def test_approved_refund_is_verified_and_repeat_approval_is_idempotent(
     assert "event: run.completed" in events.text
     assert web_harness.services.require_refund_repository().count_refunds() == 1
     assert web_harness.services.require_refund_repository().count_audit_events() == 4
-    assert orders[0]["payment"]["status"] == "refunded"
-    assert len(orders[0]["refunds"]) == 1
+    assert order["payment"]["status"] == "refunded"
+    assert len(order["refunds"]) == 1
 
 
 def test_changed_order_marks_pending_preview_stale(web_harness: WebHarness) -> None:
@@ -161,10 +157,10 @@ def test_changed_order_marks_pending_preview_stale(web_harness: WebHarness) -> N
         thread_id=thread_id,
         order_id="ORD-REFUND-STALE",
     )
-    changed = web_harness.client.patch(
-        "/api/orders/ORD-REFUND-STALE",
-        headers=headers,
-        json={
+    changed = web_harness.update_seeded_order(
+        "refund.stale",
+        "ORD-REFUND-STALE",
+        {
             "status": "shipped",
             "shipment": {"status": "in_transit", "last_event": "已经发货"},
         },
@@ -175,7 +171,7 @@ def test_changed_order_marks_pending_preview_stale(web_harness: WebHarness) -> N
         json={"action_id": preview["action_id"], "decision": "approve"},
     )
 
-    assert changed.status_code == 200
+    assert changed.status == "shipped"
     assert approved.status_code == 409
     assert approved.json()["error_code"] == "refund_preview_stale"
     assert web_harness.services.require_refund_repository().count_refunds() == 0
@@ -271,7 +267,7 @@ def test_approval_does_not_consume_second_llm_quota(web_harness: WebHarness) -> 
 def test_pending_thread_blocks_new_messages_before_llm_and_cross_thread_conflicts(
     web_harness: WebHarness,
 ) -> None:
-    """验证待审批 thread 不再调用模型，同订单第二个 thread 不能创建冲突动作。"""
+    """验证待审批会话不再调用模型，同订单请求复用原会话并保持待审批。"""
 
     _, headers, thread_id = _prepare_refundable_order(
         web_harness,
@@ -291,7 +287,7 @@ def test_pending_thread_blocks_new_messages_before_llm_and_cross_thread_conflict
         json={"thread_id": thread_id, "message": "再说点别的"},
     )
     second_thread = str(
-        web_harness.client.post("/api/conversations", headers=headers).json()[
+        web_harness.create_order_conversation(headers, "ORD-REFUND-CONCURRENT")[
             "thread_id"
         ]
     )
@@ -306,16 +302,17 @@ def test_pending_thread_blocks_new_messages_before_llm_and_cross_thread_conflict
 
     assert blocked.status_code == 409
     assert blocked.json()["error_code"] == "refund_approval_required"
-    assert len(web_harness.interpreter.calls) == calls_before + 1
-    assert conflicting.status_code == 200
-    assert conflicting.json()["public_status"] == "refund_conflict"
+    assert second_thread == thread_id
+    assert len(web_harness.interpreter.calls) == calls_before
+    assert conflicting.status_code == 409
+    assert conflicting.json()["error_code"] == "refund_approval_required"
     assert web_harness.services.require_refund_repository().count_refunds() == 0
 
 
-def test_refund_approval_enforces_csrf_origin_and_guest_boundary(
+def test_refund_approval_enforces_csrf_origin_and_anonymous_boundary(
     web_harness: WebHarness,
 ) -> None:
-    """验证缺少同源审批证明和游客退款请求都保持零写入。"""
+    """验证缺少同源审批证明和匿名退款请求都保持零写入。"""
 
     _, headers, thread_id = _prepare_refundable_order(
         web_harness,
@@ -337,25 +334,19 @@ def test_refund_approval_enforces_csrf_origin_and_guest_boundary(
         headers={"Origin": ORIGIN, "X-CSRF-Token": "invalid"},
         json={"action_id": preview["action_id"], "decision": "approve"},
     )
-    guest_session = web_harness.client.post("/api/auth/logout", headers=headers).json()
-    guest_headers = web_harness.mutation_headers(str(guest_session["csrf_token"]))
-    guest_thread = web_harness.client.post(
+    anonymous_session = web_harness.client.post(
+        "/api/auth/logout", headers=headers
+    ).json()
+    anonymous = web_harness.client.post(
         "/api/conversations",
-        headers=guest_headers,
-    ).json()["thread_id"]
-    guest_refund = web_harness.client.post(
-        "/api/chat/messages",
-        headers=guest_headers,
-        json={
-            "thread_id": guest_thread,
-            "message": "请退款 ORD-001，商品有质量问题",
-        },
+        headers={"Origin": ORIGIN},
+        json={"related_order_id": "ORD-REFUND-SECURITY"},
     )
 
     assert no_origin.status_code == 403
     assert no_origin.json()["error_code"] == "origin_not_allowed"
     assert bad_csrf.status_code == 403
     assert bad_csrf.json()["error_code"] == "csrf_failed"
-    assert guest_refund.status_code == 200
-    assert guest_refund.json()["public_status"] == "unsupported"
+    assert anonymous_session["mode"] == "anonymous"
+    assert anonymous.status_code == 401
     assert web_harness.services.require_refund_repository().count_refunds() == 0

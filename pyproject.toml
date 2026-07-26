@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "commerce-resolve-agent"
-version = "0.8.0"
+version = "2.0.0"
 description = "A policy-aware e-commerce after-sales agent built with LangGraph."
 readme = "README.md"
 requires-python = ">=3.12"
@@ -33,6 +33,9 @@ dev = [
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/commerce_resolve"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"migrations" = "commerce_resolve/migrations"
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]

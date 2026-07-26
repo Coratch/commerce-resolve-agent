@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, Request
@@ -11,16 +13,24 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
+from commerce_resolve.operations.manifest import development_release_manifest
+from commerce_resolve.operations.models import ReleaseManifest
+from commerce_resolve.structured_logging import log_event
+
 from .dependencies import WebServices, create_default_services
 from .errors import ApiError
+from .health import register_health_routes
+from .request_context import RequestContextMiddleware
 from .routes import (
+    admin_router,
     auth_router,
     chat_router,
     conversations_router,
     l2_router,
-    orders_router,
+    support_router,
+    workspace_router,
 )
-from .settings import WebSettings
+from .settings import DeploymentSettings, WebSettings
 from .spa import register_spa_routes
 
 
@@ -111,16 +121,34 @@ async def handle_unexpected_error(
 
 
 def _build_lifespan(services: WebServices):
-    """创建负责关闭默认数据库 Engine 的 FastAPI lifespan。"""
+    """创建负责重启收敛、停机收口和资源释放的 FastAPI lifespan。"""
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
-        """在应用生命周期结束时释放持久连接资源。"""
+        """启动时收敛遗留 Run，结束时中断超时 Run 并释放连接。"""
 
+        logger = logging.getLogger("commerce_resolve.lifecycle")
         try:
-            services.require_conversation_repository().interrupt_unfinished_runs()
+            startup_count = (
+                services.require_conversation_repository().interrupt_unfinished_runs()
+            )
+            log_event(
+                logger,
+                logging.INFO,
+                "lifecycle.reconciled",
+                interrupted_runs=startup_count,
+            )
             yield
         finally:
+            shutdown_count = (
+                services.require_conversation_repository().interrupt_unfinished_runs()
+            )
+            log_event(
+                logger,
+                logging.INFO,
+                "lifecycle.shutdown_reconciled",
+                interrupted_runs=shutdown_count,
+            )
             services.dispose()
 
     return lifespan
@@ -131,21 +159,31 @@ def create_app(
     services: WebServices | None = None,
     *,
     mount_spa: bool = True,
+    deployment_settings: DeploymentSettings | None = None,
+    release_manifest: ReleaseManifest | None = None,
 ) -> FastAPI:
-    """创建可注入 Fake 依赖测试的 CommerceResolve FastAPI 应用。"""
+    """创建可注入 Fake 依赖、部署配置和发布清单的 FastAPI 应用。"""
 
     selected_settings = services.settings if services is not None else settings
     selected_settings = selected_settings or WebSettings.from_env()
     selected_services = services or create_default_services(selected_settings)
+    selected_deployment = deployment_settings or DeploymentSettings.from_env(
+        selected_settings
+    )
+    project_root = Path(__file__).resolve().parents[3]
+    selected_release = release_manifest or development_release_manifest(project_root)
     app = FastAPI(
         title="CommerceResolve Internal API",
-        version="0.7.0",
+        version=selected_release.app_version,
         docs_url=None,
         redoc_url=None,
         lifespan=_build_lifespan(selected_services),
     )
     app.state.services = selected_services
+    app.state.deployment_settings = selected_deployment
+    app.state.release_manifest = selected_release
     app.add_middleware(SecurityHeadersMiddleware)
+    app.add_middleware(RequestContextMiddleware)
     app.add_exception_handler(ApiError, handle_api_error)  # type: ignore[arg-type]
     app.add_exception_handler(
         RequestValidationError,
@@ -156,16 +194,13 @@ def create_app(
         handle_unexpected_error,  # type: ignore[arg-type]
     )
     app.include_router(auth_router)
+    app.include_router(admin_router)
     app.include_router(chat_router)
     app.include_router(conversations_router)
     app.include_router(l2_router)
-    app.include_router(orders_router)
-
-    @app.get("/api/health", include_in_schema=False)
-    def health() -> dict[str, str]:
-        """返回不包含配置和数据库细节的进程健康状态。"""
-
-        return {"status": "ok"}
+    app.include_router(support_router)
+    app.include_router(workspace_router)
+    register_health_routes(app, selected_deployment, selected_release)
 
     if mount_spa:
         register_spa_routes(app, selected_settings.frontend_dist_path)

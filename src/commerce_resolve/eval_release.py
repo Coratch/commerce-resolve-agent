@@ -1,4 +1,4 @@
-"""使用固定命令、环境白名单和脱敏日志执行 v0.8 离线发布门禁。"""
+"""使用固定命令、环境白名单和脱敏日志执行统一离线发布门禁。"""
 
 from __future__ import annotations
 
@@ -36,6 +36,7 @@ class ReleaseCheck:
     cwd_kind: Literal["root", "frontend"] = "root"
     timeout_seconds: int = 300
     required: bool = True
+    incomplete_exit_codes: tuple[int, ...] = ()
     allowed_environment_keys: tuple[str, ...] = (
         "PATH",
         "HOME",
@@ -117,14 +118,26 @@ class SubprocessReleaseExecutor:
             project_root / "frontend" if check.cwd_kind == "frontend" else project_root
         )
         started = time.monotonic()
-        process = subprocess.Popen(
-            check.argv,
-            cwd=cwd,
-            env=_allowed_environment(check),
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            start_new_session=True,
-        )
+        try:
+            process = subprocess.Popen(
+                check.argv,
+                cwd=cwd,
+                env=_allowed_environment(check),
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                start_new_session=True,
+            )
+        except OSError as error:
+            summary = f"executor_unavailable:{type(error).__name__}"
+            log_path.parent.mkdir(parents=True, exist_ok=True)
+            log_path.write_text(summary, encoding="utf-8")
+            return EvalReleaseCheckResult(
+                check_id=check.check_id,
+                status="incomplete",
+                duration_ms=max(0, int((time.monotonic() - started) * 1000)),
+                output_hash=hashlib.sha256(summary.encode("utf-8")).hexdigest(),
+                summary=summary,
+            )
         timed_out = False
         try:
             output, _ = process.communicate(timeout=check.timeout_seconds)
@@ -147,9 +160,16 @@ class SubprocessReleaseExecutor:
                 output_hash=digest,
                 summary=f"timeout:{check.timeout_seconds}s; {tail}",
             )
+        status = (
+            "incomplete"
+            if process.returncode in check.incomplete_exit_codes
+            else "passed"
+            if process.returncode == 0
+            else "failed"
+        )
         return EvalReleaseCheckResult(
             check_id=check.check_id,
-            status="passed" if process.returncode == 0 else "failed",
+            status=status,
             exit_code=process.returncode,
             duration_ms=duration_ms,
             output_hash=digest,
@@ -176,6 +196,34 @@ def build_release_checks(
             "backend-ruff-format", (python, "-m", "ruff", "format", "--check", ".")
         ),
         ReleaseCheck("python-dependency-check", (python, "-m", "pip", "check")),
+        ReleaseCheck(
+            "deployment-bundle",
+            (python, "-m", "commerce_resolve.release_checks", "deployment-bundle"),
+        ),
+        ReleaseCheck(
+            "deployment-operations-tests",
+            (
+                python,
+                "-m",
+                "pytest",
+                "-q",
+                "tests/test_operations_models.py",
+                "tests/test_operations_preflight.py",
+                "tests/test_operations_lifecycle.py",
+                "tests/test_operations_health.py",
+                "tests/test_operations_backup_restore.py",
+                "tests/test_operations_upgrade.py",
+                "tests/test_structured_logging.py",
+                "tests/test_deployment_bundle.py",
+                "tests/test_operations_evaluation.py",
+            ),
+            timeout_seconds=300,
+        ),
+        ReleaseCheck(
+            "docker-compose-config",
+            (python, "-m", "commerce_resolve.release_checks", "compose-config"),
+            incomplete_exit_codes=(3,),
+        ),
         ReleaseCheck(
             "offline-eval-repeat-1",
             (
@@ -211,8 +259,8 @@ def build_release_checks(
             (python, "-m", "commerce_resolve.release_checks", "empty-migration"),
         ),
         ReleaseCheck(
-            "v0.7-to-current-migration",
-            (python, "-m", "commerce_resolve.release_checks", "v07-head"),
+            "current-migration-head",
+            (python, "-m", "commerce_resolve.release_checks", "current-head"),
         ),
         ReleaseCheck(
             "openapi-generated-types-consistency",

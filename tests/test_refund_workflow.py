@@ -1,6 +1,6 @@
 """验证退款主图的资格、暂停、拒绝、执行、过期和失败路径。"""
 
-from datetime import date
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -202,6 +202,29 @@ def test_ineligible_refund_never_reserves_or_executes(
 
     assert result["status"] == "refund_ineligible"
     assert result["error_code"] == reason_code
+    assert gateway.reserve_calls == 0
+    assert gateway.execute_calls == 0
+
+
+def test_delivered_order_outside_seven_day_window_is_rejected(
+    policy_repository: SqlitePolicyRepository,
+) -> None:
+    """验证超过七天期限的预置场景由确定性规则拒绝且没有退款副作用。"""
+
+    evaluated_at = datetime(2026, 7, 24, 8, 0, tzinfo=UTC)
+    context = _context(
+        order_status="delivered",
+        shipment_status="delivered",
+        shipment_updated_at=evaluated_at - timedelta(days=8),
+        evaluated_at=evaluated_at,
+    )
+    gateway = FakeRefundGateway({(USER_ID, WORKSPACE_ID, "ORD-001"): context})
+    graph = _graph(policy_repository, gateway)
+
+    result = _start(graph)
+
+    assert result["status"] == "refund_ineligible"
+    assert result["refund_eligibility"].reason_code == "refund_window_expired"
     assert gateway.reserve_calls == 0
     assert gateway.execute_calls == 0
 

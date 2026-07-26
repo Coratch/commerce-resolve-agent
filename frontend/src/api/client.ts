@@ -1,13 +1,22 @@
 import type {
+  AdminAuditRecord,
+  AdminCustomer,
+  AdminEvalSnapshot,
+  AdminInvitation,
+  AdminInvitationCreated,
+  AdminInvitationInput,
+  AdminOverview,
+  AdminRunDetail,
+  AdminRunSummary,
+  AdminSystemSnapshot,
   AgentRun,
   ApiErrorBody,
   ChatResponse,
+  ConversationResponse,
   ConversationListResponse,
   ConversationMessagesResponse,
   ConversationSummary,
-  MockPaymentInput,
-  OrderInput,
-  OrderUpdate,
+  DemoWorkspaceStatus,
   MemoryValue,
   PendingL2Response,
   PendingRefundResponse,
@@ -17,12 +26,16 @@ import type {
   PublicL2TracePage,
   PublicL2UpgradePreview,
   PublicMemoryProposal,
-  PublicOrder,
-  PublicPayment,
   PublicRefundPreview,
   RunAcceptedResponse,
   RunEvent,
+  ServiceRecordDetail,
   SessionResponse,
+  SupportOrderDetail,
+  SupportOrdersPage,
+  SupportOverview,
+  SupportServicesPage,
+  WorkspaceResetResult,
 } from "./types";
 
 let csrfToken = "";
@@ -41,8 +54,8 @@ export class ApiError extends Error {
 }
 
 /** 更新仅保存在页面内存中的同步 CSRF Token。 */
-export function setCsrfToken(value: string): void {
-  csrfToken = value;
+export function setCsrfToken(value: string | null | undefined): void {
+  csrfToken = value ?? "";
 }
 
 /** 清理页面内存中的旧 CSRF Token。 */
@@ -57,7 +70,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   if (init.body !== undefined) {
     headers.set("Content-Type", "application/json");
   }
-  if (init.method !== undefined && init.method !== "GET") {
+  if (init.method !== undefined && init.method !== "GET" && csrfToken !== "") {
     headers.set("X-CSRF-Token", csrfToken);
   }
   const response = await fetch(path, {
@@ -109,14 +122,80 @@ export async function logout(): Promise<SessionResponse> {
   const session = await request<SessionResponse>("/api/auth/logout", {
     method: "POST",
   });
-  setCsrfToken(session.csrf_token);
+  clearCsrfToken();
   localStorage.removeItem("commerce-resolve-thread");
   return session;
 }
 
-/** 为当前服务端身份创建持久 conversation。 */
-export async function createConversation(): Promise<{ thread_id: string }> {
-  return request("/api/conversations", { method: "POST" });
+/** 为当前身份创建普通会话，或创建与指定订单绑定的售后会话。 */
+export async function createConversation(
+  relatedOrderId: string,
+): Promise<ConversationResponse> {
+  return request("/api/conversations", {
+    method: "POST",
+    body: JSON.stringify({ related_order_id: relatedOrderId }),
+  });
+}
+
+/** 读取当前账号版本化演示工作区的有限公开状态。 */
+export async function getDemoWorkspace(): Promise<DemoWorkspaceStatus> {
+  return request("/api/demo-workspace");
+}
+
+/** 经明确确认完整重置本人演示工作区。 */
+export async function resetDemoWorkspace(
+  clientRequestId: string,
+): Promise<WorkspaceResetResult> {
+  return request("/api/demo-workspace/reset", {
+    method: "POST",
+    body: JSON.stringify({
+      client_request_id: clientRequestId,
+      confirmation: "RESET",
+    }),
+  });
+}
+
+/** 读取当前身份的售后首页只读投影。 */
+export async function getSupportOverview(): Promise<SupportOverview> {
+  return request("/api/support/overview");
+}
+
+/** 分页读取当前身份可见的客户订单。 */
+export async function listSupportOrders(input?: {
+  cursor?: string;
+  q?: string;
+  view?: "all" | "processing" | "shipping" | "delivered" | "after_sales";
+}): Promise<SupportOrdersPage> {
+  const query = new URLSearchParams();
+  if (input?.cursor !== undefined) query.set("cursor", input.cursor);
+  if (input?.q !== undefined && input.q.trim() !== "") query.set("q", input.q.trim());
+  if (input?.view !== undefined) query.set("view", input.view);
+  const suffix = query.size === 0 ? "" : `?${query.toString()}`;
+  return request(`/api/support/orders${suffix}`);
+}
+
+/** 读取当前身份有权访问的订单详情。 */
+export async function getSupportOrder(orderId: string): Promise<SupportOrderDetail> {
+  return request(`/api/support/orders/${encodeURIComponent(orderId)}`);
+}
+
+/** 分页读取进行中或历史客户服务。 */
+export async function listSupportServices(
+  view: "active" | "history",
+  cursor?: string,
+): Promise<SupportServicesPage> {
+  const query = new URLSearchParams({ view });
+  if (cursor !== undefined) {
+    query.set("cursor", cursor);
+  }
+  return request(`/api/support/services?${query.toString()}`);
+}
+
+/** 读取一条当前身份可见的客户服务详情。 */
+export async function getSupportService(
+  serviceId: string,
+): Promise<ServiceRecordDetail> {
+  return request(`/api/support/services/${encodeURIComponent(serviceId)}`);
 }
 
 /** 列出当前身份可见的活动或归档会话。 */
@@ -357,45 +436,83 @@ export async function decideRefund(
   );
 }
 
-/** 列出当前账号私有工作区中的订单与物流。 */
-export async function listOrders(): Promise<PublicOrder[]> {
-  const response = await request<{ orders: PublicOrder[] }>("/api/orders");
-  return response.orders;
+/** 读取运营控制台可见的有限客户目录。 */
+export async function listAdminCustomers(): Promise<AdminCustomer[]> {
+  return request("/api/admin/customers");
 }
 
-/** 创建当前账号私有演示订单及可选物流。 */
-export async function createOrder(input: OrderInput): Promise<PublicOrder> {
-  return request("/api/orders", {
+/** 为明确目标客户完整重置版本化演示工作区。 */
+export async function resetAdminDemoWorkspace(
+  userId: string,
+  clientRequestId: string,
+): Promise<WorkspaceResetResult> {
+  return request(
+    `/api/admin/customers/${encodeURIComponent(userId)}/demo-workspace/reset`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        client_request_id: clientRequestId,
+        confirmation: "RESET",
+      }),
+    },
+  );
+}
+
+/** 列出不含明文和 Hash 的邀请码状态。 */
+export async function listAdminInvitations(): Promise<AdminInvitation[]> {
+  return request("/api/admin/invitations");
+}
+
+/** 创建邀请码并仅在本次调用中接收明文。 */
+export async function createAdminInvitation(
+  input: AdminInvitationInput,
+): Promise<AdminInvitationCreated> {
+  return request("/api/admin/invitations", {
     method: "POST",
     body: JSON.stringify(input),
   });
 }
 
-/** 更新当前账号可访问的订单与物流。 */
-export async function updateOrder(
-  orderId: string,
-  input: OrderUpdate,
-): Promise<PublicOrder> {
-  return request(`/api/orders/${encodeURIComponent(orderId)}`, {
-    method: "PATCH",
-    body: JSON.stringify(input),
-  });
-}
-
-/** 创建或更新当前订单退款前使用的本地 Mock 支付事实。 */
-export async function upsertMockPayment(
-  orderId: string,
-  input: MockPaymentInput,
-): Promise<PublicPayment> {
-  return request(`/api/orders/${encodeURIComponent(orderId)}/payment`, {
-    method: "PUT",
-    body: JSON.stringify(input),
-  });
-}
-
-/** 删除当前账号可访问的订单及其物流。 */
-export async function deleteOrder(orderId: string): Promise<void> {
-  await request(`/api/orders/${encodeURIComponent(orderId)}`, {
+/** 撤销指定邀请码，不读取或传输明文。 */
+export async function revokeAdminInvitation(invitationId: string): Promise<void> {
+  await request(`/api/admin/invitations/${encodeURIComponent(invitationId)}`, {
     method: "DELETE",
   });
+}
+
+/** 读取后台业务写入的脱敏审计。 */
+export async function listAdminAudit(): Promise<AdminAuditRecord[]> {
+  return request("/api/admin/audit");
+}
+
+/** 读取运营概览的权威计数和只读状态。 */
+export async function getAdminOverview(): Promise<AdminOverview> {
+  return request("/api/admin/overview");
+}
+
+/** 按有限条件读取脱敏 Agent Run 列表。 */
+export async function listAdminRuns(input?: {
+  status?: string;
+  requestKind?: string;
+}): Promise<AdminRunSummary[]> {
+  const query = new URLSearchParams();
+  if (input?.status) query.set("status", input.status);
+  if (input?.requestKind) query.set("request_kind", input.requestKind);
+  const suffix = query.size === 0 ? "" : `?${query.toString()}`;
+  return request(`/api/admin/agent-runs${suffix}`);
+}
+
+/** 读取一条 Run 的事件白名单和有限 L2 诊断。 */
+export async function getAdminRun(runId: string): Promise<AdminRunDetail> {
+  return request(`/api/admin/agent-runs/${encodeURIComponent(runId)}`);
+}
+
+/** 读取最近 Eval Candidate 与当前 Baseline 的只读摘要。 */
+export async function getAdminEval(): Promise<AdminEvalSnapshot> {
+  return request("/api/admin/eval");
+}
+
+/** 读取不含路径、密钥和配置值的系统状态。 */
+export async function getAdminSystem(): Promise<AdminSystemSnapshot> {
+  return request("/api/admin/system");
 }

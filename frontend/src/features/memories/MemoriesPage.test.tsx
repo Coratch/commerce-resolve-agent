@@ -24,6 +24,7 @@ const session: SessionResponse = {
     can_manage_orders: true,
     can_manage_refunds: true,
     can_use_llm: true,
+    can_access_admin: false,
   },
 };
 
@@ -61,7 +62,7 @@ it("列出已确认偏好并通过受限下拉值纠正", async () => {
 
   renderPage();
 
-  const select = await screen.findByLabelText("修改 preferred_language");
+  const select = await screen.findByLabelText("修改回复语言");
   await user.selectOptions(select, "en");
 
   expect(api.updateMemory).toHaveBeenCalledWith("memory-001", "en");

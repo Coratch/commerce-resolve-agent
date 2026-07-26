@@ -19,6 +19,7 @@ from ..schemas import (
     DeleteResponse,
     OrdersResponse,
     PublicOrder,
+    PublicOrderItem,
     PublicPayment,
     PublicRefund,
     PublicShipment,
@@ -48,6 +49,7 @@ def _public_order(
     return PublicOrder(
         order_id=record.order_id,
         status=record.status,
+        items=tuple(PublicOrderItem.from_record(item) for item in record.items),
         shipment=shipment,
         payment=payment,
         refunds=refunds,
@@ -87,6 +89,8 @@ def _private_identity(request: Request, *, mutation: bool) -> tuple[str, str]:
     """返回经过注册 Session 验证的用户和工作区 ID。"""
 
     access = require_registered_access(request, mutation=mutation)
+    if mutation:
+        raise api_error(403, "customer_data_read_only")
     user_id = access.principal.user_id
     if user_id is None:
         raise api_error(401, "authentication_required")

@@ -36,7 +36,10 @@ SUCCESS_MESSAGE = (
 )
 UNAVAILABLE_MESSAGE = "无法查询该订单，请检查订单号或当前账号。"
 FAILURE_MESSAGE = "订单或物流服务暂时不可用，请稍后重试。"
-UNSUPPORTED_MESSAGE = "当前版本只支持订单和物流查询，暂不执行退款、取消或修改订单操作。"
+UNSUPPORTED_MESSAGE = (
+    "当前演示支持经确认的 Mock 退款，暂不支持退货寄回、换货、取消订单或修改收货信息。"
+    "如需申请退款，请明确说明退款原因。"
+)
 
 
 class EvalToolCall(BaseModel):

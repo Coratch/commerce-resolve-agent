@@ -1,4 +1,4 @@
-"""在唯一主图中注册可恢复、可审批且有预算上限的 AI 二线客服 Harness。"""
+"""在唯一主图中注册可恢复、可审批且有预算上限的 AI 深度处理 Harness。"""
 
 from __future__ import annotations
 
@@ -66,10 +66,11 @@ from commerce_resolve.l2_tools import L2ToolContext, L2ToolRegistry
 from commerce_resolve.state import AgentState, RunContext
 
 L2_UPGRADE_MESSAGE = (
-    "这个问题可以升级给 AI 二线客服进一步处理。它并非真人，确认后会在限定预算内"
-    "读取订单、物流、Mock 退款状态、售后政策和你已确认的偏好。"
+    "这个问题需要进一步核对。经你同意后，AI 售后助手会在限定范围内"
+    "读取订单、物流、Mock 退款状态、售后政策和你已确认的偏好，"
+    "并可能继续询问补充信息。它不是真人客服，也不会自动执行退款。"
 )
-L2_CANCELLED_MESSAGE = "已取消升级，未创建 AI 二线 Case，也未调用二线模型。"
+L2_CANCELLED_MESSAGE = "已停止进一步核对，未创建处理 Case，也未调用处理模型。"
 L2_TOOLSET_VERSION = "v0.5.0"
 
 
@@ -310,7 +311,7 @@ class L2Nodes:
                 phase="stopped",
                 issue_summary=summary,
                 related_order_id=state.get("order_id"),
-                final_response="当前无法升级 AI 二线客服，请稍后重试。",
+                final_response="当前无法进入 AI 深度处理，请稍后重试。",
                 stop_reason="safety_rejected",
             )
             return {
@@ -741,7 +742,7 @@ class L2Nodes:
                 stopped = _stopped_runtime(
                     current,
                     reason=reason,
-                    message="AI 二线客服无法在安全预算内继续处理，任务已停止。",
+                    message="AI 深度处理无法在安全预算内继续，任务已停止。",
                     failure_attribution=(
                         "tool_rejected"
                         if reason == "no_progress"
@@ -785,7 +786,7 @@ class L2Nodes:
                 }
             )
             message = (
-                f"AI 二线客服建议保存偏好：{proposal.memory_type}={proposal.value}。"
+                f"AI 深度处理建议保存偏好：{proposal.memory_type}={proposal.value}。"
                 "只有你明确确认后才会写入长期记忆。"
             )
             return {
@@ -800,7 +801,7 @@ class L2Nodes:
                 unresolved = current.model_copy(
                     update={
                         "phase": "unresolved",
-                        "final_response": "现有可信证据不足，AI 二线客服未生成结论。",
+                        "final_response": "现有可信证据不足，AI 深度处理未生成结论。",
                         "stop_reason": "insufficient_evidence",
                         "failure_attribution": "verification_failed",
                     }
@@ -835,7 +836,7 @@ class L2Nodes:
         stopped = _stopped_runtime(
             current,
             reason="invalid_model_output",
-            message="AI 二线客服返回了无效动作，当前任务已安全停止。",
+            message="AI 深度处理返回了无效动作，当前任务已安全停止。",
             failure_attribution="model_output_invalid",
         )
         return {"l2_runtime": stopped}
@@ -892,7 +893,7 @@ class L2Nodes:
             updated = _stopped_runtime(
                 updated,
                 reason="tool_failed",
-                message="受控业务工具连续失败，AI 二线客服已安全停止。",
+                message="受控业务工具连续失败，AI 深度处理已安全停止。",
                 failure_attribution="tool_failed",
             )
         _transition(self._l2, runtime, updated, status="l2_active")
@@ -1175,7 +1176,7 @@ class L2Nodes:
         current = state.get("l2_runtime")
         if current is None or current.case_id is None:
             raise ValueError("stopping L2 case requires case")
-        message = current.final_response or "AI 二线客服未能安全完成当前任务。"
+        message = current.final_response or "AI 深度处理未能安全完成当前任务。"
         if current.phase == "budget_exhausted":
             case_status: L2CaseStatus = "l2_budget_exhausted"
             public_status = "l2_budget_exhausted"

@@ -43,6 +43,7 @@ class ConversationSummary(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     thread_id: str
+    related_order_id: str | None = None
     title: str
     lifecycle_status: ConversationLifecycle
     history_state: HistoryState

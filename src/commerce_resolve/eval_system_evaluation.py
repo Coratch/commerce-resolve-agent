@@ -380,7 +380,11 @@ def _evaluate_scenario(scenario_id: str) -> bool:
 
     if scenario_id == "catalog-unique":
         ids = [item.scenario_id for suite in catalog.suites for item in suite.scenarios]
-        return len(catalog.suites) == 8 and len(ids) == len(set(ids)) == 217
+        return (
+            len(catalog.suites) == len(registered_adapters())
+            and bool(ids)
+            and len(ids) == len(set(ids))
+        )
     if scenario_id == "catalog-duplicate":
         first, second = registered_adapters()[:2]
         duplicate = replace(

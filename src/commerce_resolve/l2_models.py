@@ -7,6 +7,7 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from commerce_resolve.business_models import ORDER_ID_PATTERN_TEXT
 from commerce_resolve.models import PolicyQuery, RefundReason
 
 L2CaseStatus = Literal[
@@ -155,7 +156,7 @@ class GetOrderCall(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     tool: Literal["get_order"]
-    order_id: str = Field(pattern=r"^ORD-[A-Z0-9-]{3,32}$")
+    order_id: str = Field(pattern=ORDER_ID_PATTERN_TEXT)
 
 
 class GetShipmentCall(BaseModel):
@@ -164,7 +165,7 @@ class GetShipmentCall(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     tool: Literal["get_shipment"]
-    order_id: str = Field(pattern=r"^ORD-[A-Z0-9-]{3,32}$")
+    order_id: str = Field(pattern=ORDER_ID_PATTERN_TEXT)
 
 
 class GetRefundStatusCall(BaseModel):
@@ -173,7 +174,7 @@ class GetRefundStatusCall(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     tool: Literal["get_refund_status"]
-    order_id: str = Field(pattern=r"^ORD-[A-Z0-9-]{3,32}$")
+    order_id: str = Field(pattern=ORDER_ID_PATTERN_TEXT)
 
 
 class SearchPolicyCall(BaseModel):
@@ -234,7 +235,7 @@ class ProposeRefundDecision(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     kind: Literal["propose_refund"]
-    order_id: str = Field(pattern=r"^ORD-[A-Z0-9-]{3,32}$")
+    order_id: str = Field(pattern=ORDER_ID_PATTERN_TEXT)
     reason: RefundReason
 
 
@@ -333,7 +334,7 @@ class OrderObservationSource(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     kind: Literal["order"]
-    order_id: str = Field(pattern=r"^ORD-[A-Z0-9-]{3,32}$")
+    order_id: str = Field(pattern=ORDER_ID_PATTERN_TEXT)
     source_version: str = Field(min_length=64, max_length=64)
 
 
@@ -343,7 +344,7 @@ class ShipmentObservationSource(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     kind: Literal["shipment"]
-    order_id: str = Field(pattern=r"^ORD-[A-Z0-9-]{3,32}$")
+    order_id: str = Field(pattern=ORDER_ID_PATTERN_TEXT)
     source_version: str = Field(min_length=64, max_length=64)
 
 
@@ -353,7 +354,7 @@ class RefundObservationSource(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     kind: Literal["refund"]
-    order_id: str = Field(pattern=r"^ORD-[A-Z0-9-]{3,32}$")
+    order_id: str = Field(pattern=ORDER_ID_PATTERN_TEXT)
     source_version: str = Field(min_length=64, max_length=64)
 
 

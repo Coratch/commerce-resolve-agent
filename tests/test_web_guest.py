@@ -1,97 +1,73 @@
-"""验证游客 Session、只读 Chat、零 LLM 和请求伪造防护。"""
+"""验证 v2.0 匿名访问零业务、零模型和同源写入边界。"""
 
 from tests.conftest import WebHarness
 
 
-def test_guest_can_query_demo_order_and_policy_without_llm(
+def test_anonymous_session_has_no_cookie_or_business_capability(
     web_harness: WebHarness,
 ) -> None:
-    """验证游客订单与政策查询只使用 Fake Interpreter。"""
+    """验证匿名状态不创建 Cookie、工作区、会话或模型依赖。"""
 
     session = web_harness.session()
-    csrf = str(session["csrf_token"])
-    assert session["mode"] == "guest"
-    assert session["capabilities"]["can_use_llm"] is False
-    assert "session_token" not in session
-    conversation = web_harness.client.post(
+    endpoints = (
+        "/api/support/overview",
+        "/api/support/orders",
+        "/api/support/services",
         "/api/conversations",
-        headers=web_harness.mutation_headers(csrf),
+        "/api/memories",
     )
-    thread_id = conversation.json()["thread_id"]
+    responses = [web_harness.client.get(path) for path in endpoints]
 
-    order = web_harness.client.post(
-        "/api/chat/messages",
-        headers=web_harness.mutation_headers(csrf),
-        json={"thread_id": thread_id, "message": "帮我查询 ORD-001 的物流"},
+    assert session["mode"] == "anonymous"
+    assert session["session_scope"] == "none"
+    assert session["csrf_token"] is None
+    assert all(value is False for value in session["capabilities"].values())
+    assert (
+        web_harness.client.cookies.get(web_harness.services.settings.cookie_name)
+        is None
     )
-    policy = web_harness.client.post(
-        "/api/chat/messages",
-        headers=web_harness.mutation_headers(csrf),
-        json={"thread_id": thread_id, "message": "普通商品退货期限是几天"},
-    )
-
-    assert order.status_code == 200
-    assert order.json()["public_status"] == "completed"
-    assert "上海转运中心" in order.json()["assistant_message"]
-    assert policy.status_code == 200
-    assert policy.json()["public_status"] == "policy_answered"
-    assert policy.json()["citations"]
+    assert {response.status_code for response in responses} == {401}
+    assert web_harness.repository.count_users() == 0
     assert web_harness.factory.calls == 0
     assert web_harness.interpreter.calls == []
 
 
-def test_guest_cannot_write_or_forge_access_fields(
+def test_anonymous_cannot_create_conversation_or_forge_identity(
     web_harness: WebHarness,
 ) -> None:
-    """验证游客写入无副作用，Chat 额外权限字段被 Schema 拒绝。"""
+    """验证匿名请求和伪造身份字段均不会建立业务任务。"""
 
-    session = web_harness.session()
-    csrf = str(session["csrf_token"])
     denied = web_harness.client.post(
-        "/api/orders",
-        headers=web_harness.mutation_headers(csrf),
-        json={"order_id": "ORD-GUEST", "status": "processing"},
-    )
-    conversation = web_harness.client.post(
         "/api/conversations",
-        headers=web_harness.mutation_headers(csrf),
-    ).json()
-    forged = web_harness.client.post(
-        "/api/chat/messages",
-        headers=web_harness.mutation_headers(csrf),
+        headers=web_harness.mutation_headers(None),
         json={
-            "thread_id": conversation["thread_id"],
-            "message": "查询 ORD-001",
-            "workspace_id": "private",
+            "related_order_id": "CR-7X2P-9K3M",
+            "workspace_id": "forged",
             "user_id": "admin",
-            "interpreter": "openai",
         },
     )
 
-    assert denied.status_code == 401
-    assert forged.status_code == 422
+    assert denied.status_code in {401, 422}
     assert web_harness.repository.count_users() == 0
     assert web_harness.factory.calls == 0
 
 
-def test_mutations_require_origin_and_current_csrf(
+def test_anonymous_public_mutations_require_trusted_origin(
     web_harness: WebHarness,
 ) -> None:
-    """验证缺少同源证明或同步 Token 时不会创建 conversation。"""
+    """验证登录与注册虽不需要 CSRF，但仍拒绝不可信 Origin。"""
 
-    session = web_harness.session()
-    csrf = str(session["csrf_token"])
     no_origin = web_harness.client.post(
-        "/api/conversations",
-        headers={"X-CSRF-Token": csrf},
+        "/api/auth/login",
+        json={"username": "missing", "password": "not-a-valid-password"},
     )
-    wrong_csrf = web_harness.client.post(
-        "/api/conversations",
-        headers={"Origin": "http://evil.example", "X-CSRF-Token": csrf},
+    wrong_origin = web_harness.client.post(
+        "/api/auth/login",
+        headers={"Origin": "http://evil.example"},
+        json={"username": "missing", "password": "not-a-valid-password"},
     )
 
-    assert no_origin.status_code == 403
+    assert no_origin.status_code == wrong_origin.status_code == 403
     assert no_origin.json()["error_code"] == "origin_not_allowed"
-    assert wrong_csrf.status_code == 403
-    assert wrong_csrf.json()["error_code"] == "origin_not_allowed"
+    assert wrong_origin.json()["error_code"] == "origin_not_allowed"
     assert no_origin.headers["x-content-type-options"] == "nosniff"

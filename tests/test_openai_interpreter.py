@@ -58,7 +58,8 @@ def test_openai_interpreter_returns_validated_structured_output() -> None:
                 "content": (
                     '{"text":"查询订单 ORD-001 的物流",'
                     '"previous_policy_query":null,'
-                    '"pending_refund_request":false}'
+                    '"pending_refund_request":false,'
+                    '"pending_intent_clarification":false}'
                 ),
             },
         ],
@@ -70,6 +71,10 @@ def test_openai_interpreter_returns_validated_structured_output() -> None:
         INTERPRETER_INSTRUCTIONS
     )
     assert "“普通商品”映射为\n  general" in INTERPRETER_INSTRUCTIONS
+    assert "退款资格问题必须在 policy_query.aspects 中包含 conditions" in (
+        INTERPRETER_INSTRUCTIONS
+    )
+    assert "“退库”等可能同时指向退货或退款" in INTERPRETER_INSTRUCTIONS
 
 
 def test_openai_interpreter_handles_explicit_l2_command_without_provider() -> None:
@@ -89,8 +94,26 @@ def test_openai_interpreter_handles_explicit_l2_command_without_provider() -> No
     assert actual.intent == "l2_support_request"
     assert actual.order_id is None
     assert actual.l2_issue_summary == (
-        "用户请求升级至 AI 二线客服处理，尚未提供具体售后问题。"
+        "用户请求进入 AI 深度处理，尚未提供具体售后问题。"
     )
+    create.assert_not_called()
+
+
+def test_ambiguous_after_sales_action_returns_unknown_without_provider() -> None:
+    """验证已知歧义售后词直接返回 unknown，不让模型猜测退款或退货。"""
+
+    create = Mock()
+    client = cast(
+        OpenAI,
+        SimpleNamespace(
+            chat=SimpleNamespace(completions=SimpleNamespace(create=create))
+        ),
+    )
+    interpreter = OpenAIQueryInterpreter(client=client, model="test-model")
+
+    actual = interpreter.interpret("商品质量不行，我要退库呐")
+
+    assert actual == Interpretation(intent="unknown")
     create.assert_not_called()
 
 
@@ -162,7 +185,10 @@ def test_openai_interpreter_sends_only_minimal_pending_policy_context() -> None:
 
     actual = interpreter.interpret(
         "普通服饰",
-        InterpretationContext(previous_policy_query=previous_query),
+        InterpretationContext(
+            previous_policy_query=previous_query,
+            pending_intent_clarification=True,
+        ),
     )
 
     payload = json.loads(create.call_args.kwargs["messages"][1]["content"])
@@ -171,6 +197,7 @@ def test_openai_interpreter_sends_only_minimal_pending_policy_context() -> None:
         "text": "普通服饰",
         "previous_policy_query": previous_query.model_dump(mode="json"),
         "pending_refund_request": False,
+        "pending_intent_clarification": True,
     }
     assert "messages" not in payload
     assert "owner_user_id" not in payload

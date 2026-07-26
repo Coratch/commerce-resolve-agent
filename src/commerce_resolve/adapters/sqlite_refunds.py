@@ -626,6 +626,10 @@ class SqliteRefundRepository:
             order_status=cast(object, order.status),
             shipment_status=(cast(object, shipment.status) if shipment else None),
             shipment_last_event=shipment.last_event if shipment else None,
+            shipment_updated_at=(
+                _as_utc(shipment.updated_at) if shipment is not None else None
+            ),
+            evaluated_at=self._now_utc(),
             payment_id=payment.id if payment else None,
             paid_amount_minor=payment.amount_minor if payment else 0,
             currency=(cast(PaymentCurrency, payment.currency) if payment else None),

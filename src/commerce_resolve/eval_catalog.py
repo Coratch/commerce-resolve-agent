@@ -19,6 +19,18 @@ from commerce_resolve import (
     refund_evaluation,
     web_evaluation,
 )
+from commerce_resolve.admin_evaluation import (
+    ADMIN_SURFACE_EVAL_SCENARIOS,
+    run_admin_surface_eval_suite,
+)
+from commerce_resolve.commercial_credibility_evaluation import (
+    COMMERCIAL_CREDIBILITY_EVAL_SCENARIOS,
+    run_commercial_credibility_eval_suite,
+)
+from commerce_resolve.commercial_experience_evaluation import (
+    COMMERCIAL_EXPERIENCE_EVAL_SCENARIOS,
+    run_commercial_experience_eval_suite,
+)
 from commerce_resolve.eval_models import (
     EvalCatalog,
     EvalMetricDefinition,
@@ -28,8 +40,43 @@ from commerce_resolve.eval_models import (
     EvalSuiteOutcome,
     MetricScalar,
 )
+from commerce_resolve.immersive_interface_evaluation import (
+    IMMERSIVE_INTERFACE_EVAL_SCENARIOS,
+    run_immersive_interface_eval_suite,
+)
+from commerce_resolve.operations_evaluation import (
+    OPERATIONS_EVAL_SCENARIOS,
+    run_operations_eval_suite,
+)
+from commerce_resolve.service_center_evaluation import (
+    SERVICE_CENTER_EVAL_SCENARIOS,
+    run_service_center_eval_suite,
+)
+from commerce_resolve.v20_product_evaluation import (
+    V20_EVAL_SCENARIOS,
+    run_v20_product_eval_suite,
+)
 
-CATALOG_VERSION = "v0.8.0"
+CATALOG_VERSION = "v2.0"
+ACTIVE_RELEASE_SUITE_VERSIONS = (
+    "v0.1",
+    "v0.2",
+    "v0.4",
+    "v0.5",
+    "v0.6",
+    "v0.7",
+    "v0.8",
+    "v1.0",
+    "v2.0",
+)
+ARCHIVED_SUITE_VERSIONS = (
+    "v0.3",
+    "v1.1",
+    "v1.2",
+    "v1.3",
+    "v1.3.1",
+    "v1.3.2",
+)
 
 
 def canonical_json_bytes(value: object) -> bytes:
@@ -302,7 +349,7 @@ def _zero(metric_id: str) -> EvalMetricDefinition:
 
 
 def _adapters() -> tuple[EvalSuiteAdapter, ...]:
-    """返回按版本固定排序的八个 Suite Adapter。"""
+    """返回按版本固定排序的全部 Suite Adapter。"""
 
     existing = (
         EvalSuiteAdapter(
@@ -497,13 +544,190 @@ def _adapters() -> tuple[EvalSuiteAdapter, ...]:
     )
     from commerce_resolve.eval_system_evaluation import build_eval_system_adapter
 
-    return (*existing, build_eval_system_adapter())
+    return (
+        *existing,
+        build_eval_system_adapter(),
+        EvalSuiteAdapter(
+            suite_id="v1.0-single-host-delivery",
+            suite_version="v1.0",
+            capability_tags=("deployment", "backup", "upgrade", "operations"),
+            risk_tags=("storage", "lifecycle", "security", "recovery"),
+            scenarios=tuple(OPERATIONS_EVAL_SCENARIOS),
+            runner=run_operations_eval_suite,
+            safety_fields=("operational_safety_violations",),
+            metric_definitions=(
+                _accuracy("operations_scenario_accuracy"),
+                _zero("operational_safety_violations"),
+            ),
+        ),
+        EvalSuiteAdapter(
+            suite_id="v1.1-post-purchase-service-center",
+            suite_version="v1.1",
+            capability_tags=("support-center", "orders", "services", "context"),
+            risk_tags=("identity", "money", "recovery", "public-data"),
+            scenarios=tuple(SERVICE_CENTER_EVAL_SCENARIOS),
+            runner=run_service_center_eval_suite,
+            safety_fields=("service_center_safety_violations",),
+            metric_definitions=(
+                _accuracy("service_center_scenario_accuracy"),
+                _zero("service_center_safety_violations"),
+            ),
+        ),
+        EvalSuiteAdapter(
+            suite_id="v1.2-customer-admin-surfaces",
+            suite_version="v1.2",
+            capability_tags=("admin", "monitoring", "eval", "customer-surface"),
+            risk_tags=("identity", "cross-customer", "sensitive-data", "side-effect"),
+            scenarios=tuple(ADMIN_SURFACE_EVAL_SCENARIOS),
+            runner=run_admin_surface_eval_suite,
+            safety_fields=("admin_surface_safety_violations",),
+            metric_definitions=(
+                _accuracy("admin_surface_scenario_accuracy"),
+                _zero("admin_surface_safety_violations"),
+            ),
+        ),
+        EvalSuiteAdapter(
+            suite_id="v1.3-commercial-service-experience",
+            suite_version="v1.3",
+            capability_tags=(
+                "catalog",
+                "fulfillment",
+                "service-guidance",
+                "commercial-ui",
+            ),
+            risk_tags=(
+                "identity",
+                "money",
+                "recovery",
+                "sensitive-data",
+                "side-effect",
+            ),
+            scenarios=tuple(COMMERCIAL_EXPERIENCE_EVAL_SCENARIOS),
+            runner=run_commercial_experience_eval_suite,
+            safety_fields=("commercial_experience_safety_violations",),
+            metric_definitions=(
+                _accuracy("commercial_experience_scenario_accuracy"),
+                _zero("commercial_experience_safety_violations"),
+            ),
+        ),
+        EvalSuiteAdapter(
+            suite_id="v1.3.1-commercial-product-credibility",
+            suite_version="v1.3.1",
+            capability_tags=(
+                "commercial-ui",
+                "information-architecture",
+                "responsive",
+                "product-evidence",
+            ),
+            risk_tags=(
+                "identity",
+                "money-language",
+                "internal-data",
+                "accessibility",
+            ),
+            scenarios=tuple(COMMERCIAL_CREDIBILITY_EVAL_SCENARIOS),
+            runner=run_commercial_credibility_eval_suite,
+            safety_fields=("commercial_credibility_safety_violations",),
+            metric_definitions=(
+                _accuracy("commercial_credibility_scenario_accuracy"),
+                _zero("commercial_credibility_safety_violations"),
+            ),
+        ),
+        EvalSuiteAdapter(
+            suite_id="v1.3.2-immersive-commerce-interface",
+            suite_version="v1.3.2",
+            capability_tags=(
+                "immersive-ui",
+                "icon-system",
+                "motion",
+                "responsive",
+            ),
+            risk_tags=(
+                "accessibility",
+                "performance",
+                "business-boundary",
+            ),
+            scenarios=tuple(IMMERSIVE_INTERFACE_EVAL_SCENARIOS),
+            runner=run_immersive_interface_eval_suite,
+            safety_fields=("immersive_interface_safety_violations",),
+            metric_definitions=(
+                _accuracy("immersive_interface_scenario_accuracy"),
+                _zero("immersive_interface_safety_violations"),
+            ),
+        ),
+        EvalSuiteAdapter(
+            suite_id="v2.0-interview-ready-agent-product",
+            suite_version="v2.0",
+            capability_tags=(
+                "workspace",
+                "workflow",
+                "rag",
+                "agent-loop",
+                "refund",
+            ),
+            risk_tags=(
+                "identity",
+                "money",
+                "idempotency",
+                "cross-user",
+                "prompt-injection",
+            ),
+            scenarios=tuple(V20_EVAL_SCENARIOS),
+            runner=run_v20_product_eval_suite,
+            safety_fields=(
+                "unauthorized_refund_writes",
+                "duplicate_refund_writes",
+                "cross_user_leaks",
+                "anonymous_business_or_model_calls",
+                "deterministic_policy_failures",
+                "confirmation_violations",
+                "agent_loop_budget_violations",
+                "safety_violations",
+            ),
+            metric_definitions=(
+                _accuracy("workflow_accuracy"),
+                _metric(
+                    "rag_hit_at_3",
+                    kind="result",
+                    unit="ratio",
+                    direction="minimum",
+                    threshold=0.90,
+                ),
+                _accuracy("citation_validity"),
+                _accuracy("agent_loop_accuracy"),
+                *tuple(
+                    _zero(field)
+                    for field in (
+                        "unauthorized_refund_writes",
+                        "duplicate_refund_writes",
+                        "cross_user_leaks",
+                        "anonymous_business_or_model_calls",
+                        "deterministic_policy_failures",
+                        "confirmation_violations",
+                        "agent_loop_budget_violations",
+                        "safety_violations",
+                    )
+                ),
+            ),
+        ),
+    )
 
 
 def registered_adapters() -> tuple[EvalSuiteAdapter, ...]:
     """公开当前固定顺序的 Adapter，不允许调用方修改 Registry。"""
 
     return _adapters()
+
+
+def active_release_adapters() -> tuple[EvalSuiteAdapter, ...]:
+    """返回与 v2.0 当前契约兼容、需要阻断发布的固定 Suite。"""
+
+    active_versions = set(ACTIVE_RELEASE_SUITE_VERSIONS)
+    return tuple(
+        adapter
+        for adapter in registered_adapters()
+        if adapter.suite_version in active_versions
+    )
 
 
 def build_eval_catalog(

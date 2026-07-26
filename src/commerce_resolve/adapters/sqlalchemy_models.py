@@ -34,6 +34,7 @@ class UserRow(Base):
     __tablename__ = "users"
     __table_args__ = (
         CheckConstraint("status IN ('active', 'disabled')", name="ck_users_status"),
+        CheckConstraint("role IN ('customer', 'admin')", name="ck_users_role"),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
@@ -42,6 +43,7 @@ class UserRow(Base):
     )
     password_hash: Mapped[str] = mapped_column(String(512), nullable=False)
     status: Mapped[str] = mapped_column(String(16), nullable=False, default="active")
+    role: Mapped[str] = mapped_column(String(16), nullable=False, default="customer")
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=utc_now
     )
@@ -51,11 +53,68 @@ class WorkspaceRow(Base):
     """保存注册用户与唯一私有工作区的绑定。"""
 
     __tablename__ = "workspaces"
+    __table_args__ = (
+        CheckConstraint(
+            "dataset_status IS NULL OR dataset_status IN "
+            "('initializing', 'ready', 'resetting', 'failed')",
+            name="ck_workspaces_dataset_status",
+        ),
+        CheckConstraint(
+            "reset_generation >= 0",
+            name="ck_workspaces_reset_generation",
+        ),
+    )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
     owner_user_id: Mapped[str] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"), unique=True, nullable=False
     )
+    dataset_version: Mapped[str | None] = mapped_column(String(40))
+    dataset_status: Mapped[str | None] = mapped_column(String(16))
+    reset_generation: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    active_reset_request_id: Mapped[str | None] = mapped_column(String(64))
+    initialized_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )
+
+
+class WorkspaceResetAuditRow(Base):
+    """保存演示工作区重置的脱敏、幂等审计结果。"""
+
+    __tablename__ = "workspace_reset_audit"
+    __table_args__ = (
+        UniqueConstraint(
+            "workspace_id",
+            "client_request_id",
+            name="uq_workspace_reset_request",
+        ),
+        CheckConstraint(
+            "actor_role IN ('customer', 'admin')",
+            name="ck_workspace_reset_actor_role",
+        ),
+        CheckConstraint(
+            "result IN ('succeeded', 'failed')",
+            name="ck_workspace_reset_result",
+        ),
+        CheckConstraint(
+            "generation > 0",
+            name="ck_workspace_reset_generation",
+        ),
+    )
+
+    reset_id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    workspace_id: Mapped[str] = mapped_column(
+        ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    actor_user_id: Mapped[str] = mapped_column(
+        ForeignKey("users.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
+    actor_role: Mapped[str] = mapped_column(String(16), nullable=False)
+    client_request_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    dataset_version: Mapped[str] = mapped_column(String(40), nullable=False)
+    generation: Mapped[int] = mapped_column(Integer, nullable=False)
+    result: Mapped[str] = mapped_column(String(16), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=utc_now
     )
@@ -80,6 +139,36 @@ class InvitationRow(Base):
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=utc_now
+    )
+
+
+class AdminActionAuditRow(Base):
+    """保存管理员后台写操作的脱敏结果，不替代业务事实。"""
+
+    __tablename__ = "admin_action_audit"
+    __table_args__ = (
+        CheckConstraint(
+            "result IN ('succeeded', 'failed')",
+            name="ck_admin_action_audit_result",
+        ),
+    )
+
+    audit_id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    admin_user_id: Mapped[str] = mapped_column(
+        ForeignKey("users.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
+    target_user_id: Mapped[str | None] = mapped_column(
+        ForeignKey("users.id", ondelete="RESTRICT"), index=True
+    )
+    action: Mapped[str] = mapped_column(String(64), nullable=False)
+    resource_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    resource_id: Mapped[str | None] = mapped_column(String(64))
+    result: Mapped[str] = mapped_column(String(16), nullable=False)
+    parameter_summary_json: Mapped[str] = mapped_column(
+        Text, nullable=False, default="{}"
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now, index=True
     )
 
 
@@ -132,12 +221,24 @@ class ConversationRow(Base):
             "message_count >= 0 AND next_message_sequence > 0",
             name="ck_conversations_message_count",
         ),
+        Index(
+            "uq_conversations_active_order_task",
+            "workspace_id",
+            "related_order_id",
+            unique=True,
+            sqlite_where=text(
+                "access_mode = 'registered' "
+                "AND lifecycle_status = 'active' "
+                "AND related_order_id IS NOT NULL"
+            ),
+        ),
     )
 
     thread_id: Mapped[str] = mapped_column(String(36), primary_key=True)
     subject_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
     workspace_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
     access_mode: Mapped[str] = mapped_column(String(16), nullable=False)
+    related_order_id: Mapped[str | None] = mapped_column(String(36))
     title: Mapped[str] = mapped_column(String(120), nullable=False, default="新会话")
     lifecycle_status: Mapped[str] = mapped_column(
         String(16), nullable=False, default="active"
@@ -289,7 +390,7 @@ class AgentRunEventRow(Base):
 
 
 class OrderRow(Base):
-    """保存私有工作区中的最小演示订单事实。"""
+    """保存私有工作区中的订单事实及可选演示场景来源。"""
 
     __tablename__ = "orders"
     __table_args__ = (
@@ -297,6 +398,13 @@ class OrderRow(Base):
         CheckConstraint(
             "status IN ('processing', 'shipped', 'delivered', 'cancelled')",
             name="ck_orders_status",
+        ),
+        Index(
+            "uq_orders_workspace_demo_scenario",
+            "workspace_id",
+            "demo_scenario_id",
+            unique=True,
+            sqlite_where=text("demo_scenario_id IS NOT NULL"),
         ),
     )
 
@@ -309,6 +417,43 @@ class OrderRow(Base):
         ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
     )
     status: Mapped[str] = mapped_column(String(16), nullable=False)
+    demo_scenario_id: Mapped[str | None] = mapped_column(String(80))
+    catalog_version: Mapped[str | None] = mapped_column(String(40))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now
+    )
+
+
+class OrderItemRow(Base):
+    """保存下单时商品快照；金额不替代支付和退款权威事实。"""
+
+    __tablename__ = "order_items"
+    __table_args__ = (
+        UniqueConstraint("order_pk", "sku", name="uq_order_items_order_sku"),
+        CheckConstraint("quantity BETWEEN 1 AND 99", name="ck_order_items_quantity"),
+        CheckConstraint(
+            "product_category IN ('general', 'apparel', 'hygiene', 'digital')",
+            name="ck_order_items_product_category",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    order_pk: Mapped[str] = mapped_column(
+        ForeignKey("orders.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    sku: Mapped[str] = mapped_column(String(40), nullable=False)
+    title: Mapped[str] = mapped_column(String(120), nullable=False)
+    quantity: Mapped[int] = mapped_column(Integer, nullable=False)
+    product_category: Mapped[str] = mapped_column(String(16), nullable=False)
+    product_ref: Mapped[str | None] = mapped_column(String(80))
+    variant_title: Mapped[str | None] = mapped_column(String(120))
+    unit_amount_minor: Mapped[int | None] = mapped_column(Integer)
+    currency: Mapped[str | None] = mapped_column(String(3))
+    image_ref: Mapped[str | None] = mapped_column(String(120))
+    catalog_version: Mapped[str | None] = mapped_column(String(40))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=utc_now
     )
@@ -343,6 +488,103 @@ class ShipmentRow(Base):
     )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now
+    )
+
+
+class ShipmentPackageRow(Base):
+    """保存一个订单中的独立履约包裹。"""
+
+    __tablename__ = "shipment_packages"
+    __table_args__ = (
+        UniqueConstraint(
+            "order_pk",
+            "package_id",
+            name="uq_shipment_packages_order_package",
+        ),
+        CheckConstraint(
+            "status IN ('preparing', 'in_transit', 'delivered')",
+            name="ck_shipment_packages_status",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    workspace_id: Mapped[str] = mapped_column(
+        ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    order_pk: Mapped[str] = mapped_column(
+        ForeignKey("orders.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    package_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    carrier: Mapped[str | None] = mapped_column(String(80))
+    tracking_number: Mapped[str | None] = mapped_column(String(100))
+    status: Mapped[str] = mapped_column(String(16), nullable=False)
+    last_event: Mapped[str] = mapped_column(String(300), nullable=False)
+    estimated_delivery_at: Mapped[date | None] = mapped_column(Date)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now
+    )
+
+
+class ShipmentPackageItemRow(Base):
+    """保存包裹与订单商品行之间的数量分配。"""
+
+    __tablename__ = "shipment_package_items"
+    __table_args__ = (
+        UniqueConstraint(
+            "package_pk",
+            "order_item_pk",
+            name="uq_shipment_package_items_package_item",
+        ),
+        CheckConstraint(
+            "quantity BETWEEN 1 AND 99",
+            name="ck_shipment_package_items_quantity",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    package_pk: Mapped[str] = mapped_column(
+        ForeignKey("shipment_packages.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    order_item_pk: Mapped[str] = mapped_column(
+        ForeignKey("order_items.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    quantity: Mapped[int] = mapped_column(Integer, nullable=False)
+
+
+class DemoSeedRequestRow(Base):
+    """保存管理员场景初始化请求的幂等绑定。"""
+
+    __tablename__ = "demo_seed_requests"
+    __table_args__ = (
+        UniqueConstraint(
+            "admin_user_id",
+            "client_request_id",
+            name="uq_demo_seed_requests_admin_client",
+        ),
+    )
+
+    request_id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    admin_user_id: Mapped[str] = mapped_column(
+        ForeignKey("users.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
+    target_user_id: Mapped[str] = mapped_column(
+        ForeignKey("users.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
+    workspace_id: Mapped[str] = mapped_column(
+        ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    client_request_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    scenario_id: Mapped[str] = mapped_column(String(80), nullable=False)
+    order_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
     )
 
 

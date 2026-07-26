@@ -3,22 +3,63 @@
   min-height: calc(100vh - 80px);
   place-items: center;
   padding: 3rem 1.25rem;
+  position: relative;
+  z-index: 1;
 }
 
 .card {
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: 1.5rem;
-  box-shadow: var(--shadow);
-  max-width: 440px;
-  padding: 2rem;
+  background:
+    radial-gradient(circle at 92% 8%, rgba(197, 255, 72, 0.2), transparent 13rem),
+    linear-gradient(135deg, #071914 0 38%, rgba(255, 255, 251, 0.96) 38%);
+  border: 1px solid rgba(15, 51, 41, 0.18);
+  border-radius: 2rem;
+  box-shadow: 0 42px 110px rgba(6, 30, 24, 0.2);
+  max-width: 760px;
+  min-height: 34rem;
+  overflow: hidden;
+  padding: clamp(2rem, 5vw, 4rem) clamp(2rem, 6vw, 5rem) clamp(2rem, 5vw, 4rem) 44%;
+  position: relative;
   width: 100%;
+}
+
+.card::before {
+  bottom: 2rem;
+  color: var(--electric);
+  content: "SECURE / SESSION";
+  font-family: var(--mono);
+  font-size: 0.62rem;
+  left: 2rem;
+  letter-spacing: 0.14em;
+  position: absolute;
+  writing-mode: vertical-rl;
+}
+
+.heroIcon {
+  align-items: center;
+  background: var(--electric);
+  border-radius: 50%;
+  color: var(--night);
+  display: inline-flex;
+  height: 3rem;
+  justify-content: center;
+  margin-bottom: 1rem;
+  width: 3rem;
+}
+
+.eyebrow {
+  color: var(--accent-dark);
+  font-family: var(--mono);
+  font-size: 0.62rem;
+  font-weight: 900;
+  letter-spacing: 0.12em;
 }
 
 .card h1 {
   font-family: var(--display);
-  font-size: 2rem;
-  margin: 0 0 0.45rem;
+  font-size: clamp(2.4rem, 5vw, 4.6rem);
+  letter-spacing: -0.075em;
+  line-height: 0.88;
+  margin: 0.35rem 0 0.45rem;
 }
 
 .card > p {
@@ -46,17 +87,34 @@
   border-radius: 0.75rem;
   font: inherit;
   padding: 0.8rem;
+  transition: border-color 180ms ease, box-shadow 180ms ease;
+}
+
+.form input:focus {
+  border-color: rgba(23, 63, 49, 0.62);
+  box-shadow: 0 0 0 4px rgba(23, 63, 49, 0.1);
+  outline: none;
 }
 
 .form button {
-  background: var(--accent);
+  align-items: center;
+  background: var(--electric);
   border: 0;
   border-radius: 0.75rem;
-  color: white;
+  color: var(--night);
   cursor: pointer;
+  display: inline-flex;
   font: inherit;
   font-weight: 800;
+  gap: 0.5rem;
+  justify-content: center;
   padding: 0.85rem;
+  transition: filter 180ms ease, transform 180ms ease;
+}
+
+.form button:hover:not(:disabled) {
+  box-shadow: 0 14px 30px rgba(197, 255, 72, 0.2);
+  transform: translateY(-2px);
 }
 
 .error {
@@ -71,4 +129,19 @@
   border-radius: 0.7rem;
   color: var(--success);
   padding: 0.8rem;
+}
+
+@media (max-width: 680px) {
+  .card {
+    background:
+      linear-gradient(180deg, #071914 0 6rem, rgba(255, 255, 251, 0.96) 6rem);
+    min-height: auto;
+    padding: 8rem 1.35rem 1.5rem;
+  }
+
+  .card::before {
+    left: 1.35rem;
+    top: 2rem;
+    writing-mode: initial;
+  }
 }

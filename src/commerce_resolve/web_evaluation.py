@@ -13,6 +13,7 @@ from fastapi.testclient import TestClient
 from pydantic import BaseModel, ConfigDict
 
 from commerce_resolve.adapters.fake import FakeQueryInterpreter
+from commerce_resolve.adapters.sqlite_admin import SqliteAdminRepository
 from commerce_resolve.adapters.sqlite_business import (
     SqliteBusinessRepository,
     create_business_engine,
@@ -22,6 +23,7 @@ from commerce_resolve.adapters.sqlite_policy import (
     SqlitePolicyRepository,
     build_policy_index,
 )
+from commerce_resolve.business_models import OrderCreate
 from commerce_resolve.gateways import QueryInterpreter
 from commerce_resolve.models import Interpretation, InterpretationContext
 from commerce_resolve.web.app import create_app
@@ -326,21 +328,33 @@ class _ScenarioRuntime:
         order_id: str = "ORD-PRIVATE",
         client: TestClient | None = None,
     ) -> None:
-        """在指定注册账号工作区创建带物流的演示订单。"""
+        """模拟维护端为指定浏览器当前账号写入带物流的 Mock 订单。"""
 
-        response = (client or self.client).post(
-            "/api/orders",
-            headers=self.headers(csrf),
-            json={
-                "order_id": order_id,
-                "status": "shipped",
-                "shipment": {
-                    "status": "in_transit",
-                    "last_event": "到达北京分拨中心",
-                },
-            },
+        selected = client or self.client
+        token = selected.cookies.get(self.settings.cookie_name)
+        assert token is not None
+        identity = self.repository.resolve_session(token)
+        assert identity is not None and identity.username is not None
+        username = identity.username
+        target = next(
+            item
+            for item in SqliteAdminRepository(self.engine).list_customers()
+            if item.username == username
         )
-        assert response.status_code == 201
+        self.repository.create_order(
+            user_id=target.user_id,
+            workspace_id=target.workspace_id,
+            data=OrderCreate.model_validate(
+                {
+                    "order_id": order_id,
+                    "status": "shipped",
+                    "shipment": {
+                        "status": "in_transit",
+                        "last_event": "到达北京分拨中心",
+                    },
+                }
+            ),
+        )
 
     def chat(
         self,
@@ -495,7 +509,7 @@ def _run_private_data_scenario(runtime: _ScenarioRuntime, scenario_id: str) -> N
             headers=headers,
             json={"order_id": "bad", "status": "unknown"},
         )
-        assert invalid.status_code == 422
+        assert invalid.status_code in {403, 422}
         assert runtime.client.get("/api/orders").json()["orders"] == []
         return
     runtime.create_order(csrf, order_id="ORD-SAME")
@@ -518,9 +532,11 @@ def _run_private_data_scenario(runtime: _ScenarioRuntime, scenario_id: str) -> N
             },
         )
         deleted = runtime.client.delete("/api/orders/ORD-SAME", headers=headers)
-        assert updated.json()["shipment"]["last_event"] == "本人已签收"
-        assert deleted.json() == {"deleted": True}
-        assert runtime.client.get("/api/orders").json()["orders"] == []
+        assert updated.status_code == 403
+        assert deleted.status_code == 403
+        assert (
+            runtime.client.get("/api/orders").json()["orders"][0]["status"] == "shipped"
+        )
         return
 
     client_b = runtime.new_client()
@@ -548,8 +564,8 @@ def _run_private_data_scenario(runtime: _ScenarioRuntime, scenario_id: str) -> N
                 "workspace_id": "other",
             },
         )
-        assert denied.status_code == 404
-        assert forged.status_code == 422
+        assert denied.status_code == 403
+        assert forged.status_code in {403, 422}
     finally:
         client_b.close()
 

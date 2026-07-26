@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+from datetime import timedelta
 
 from commerce_resolve.business_models import format_minor_units
 from commerce_resolve.models import (
@@ -17,6 +18,7 @@ REQUIRED_REFUND_FACT_IDS = (
     "refund.method.original",
     "refund.process.application",
 )
+RETURN_WINDOW_FACT_ID = "return.window.general"
 
 
 def _digest(payload: object) -> str:
@@ -37,11 +39,11 @@ def build_facts_fingerprint(
     policy_version: str,
     policy_fact_ids: tuple[str, ...],
 ) -> str:
-    """绑定最新业务事实、政策版本和事实标识，供批准前检测过期。"""
+    """绑定可变业务事实、政策版本和事实标识，忽略每次读取产生的评估时间。"""
 
     return _digest(
         {
-            "context": context.model_dump(mode="json"),
+            "context": context.model_dump(mode="json", exclude={"evaluated_at"}),
             "policy_version": policy_version,
             "policy_fact_ids": sorted(policy_fact_ids),
         }
@@ -55,13 +57,14 @@ def assess_refund(
     """按固定状态矩阵和已验证政策事实计算整单可退款余额。"""
 
     facts_by_id = {fact.fact_id: fact for fact in facts}
+    required_fact_ids = REQUIRED_REFUND_FACT_IDS + (
+        (RETURN_WINDOW_FACT_ID,) if context.order_status == "delivered" else ()
+    )
     selected = tuple(
-        facts_by_id[fact_id]
-        for fact_id in REQUIRED_REFUND_FACT_IDS
-        if fact_id in facts_by_id
+        facts_by_id[fact_id] for fact_id in required_fact_ids if fact_id in facts_by_id
     )
     citations = tuple(fact.citation for fact in selected)
-    if len(selected) != len(REQUIRED_REFUND_FACT_IDS):
+    if len(selected) != len(required_fact_ids):
         return RefundEligibility(
             eligible=False,
             reason_code="refund_policy_evidence_missing",
@@ -122,6 +125,21 @@ def assess_refund(
         return RefundEligibility(
             eligible=False,
             reason_code="refund_business_facts_conflict",
+            refundable_amount_minor=0,
+            currency=context.currency,
+            channel=context.channel,
+            **common,
+        )
+    if (
+        context.order_status == "delivered"
+        and context.shipment_status == "delivered"
+        and context.shipment_updated_at is not None
+        and context.evaluated_at is not None
+        and context.evaluated_at - context.shipment_updated_at > timedelta(days=7)
+    ):
+        return RefundEligibility(
+            eligible=False,
+            reason_code="refund_window_expired",
             refundable_amount_minor=0,
             currency=context.currency,
             channel=context.channel,

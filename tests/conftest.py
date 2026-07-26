@@ -9,6 +9,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from commerce_resolve.adapters.fake import FakeQueryInterpreter
+from commerce_resolve.adapters.sqlite_admin import SqliteAdminRepository
 from commerce_resolve.adapters.sqlite_business import (
     SqliteBusinessRepository,
     create_business_engine,
@@ -18,6 +19,7 @@ from commerce_resolve.adapters.sqlite_policy import (
     SqlitePolicyRepository,
     build_policy_index,
 )
+from commerce_resolve.business_models import MockPaymentInput, OrderCreate, OrderUpdate
 from commerce_resolve.gateways import QueryInterpreter
 from commerce_resolve.l2_memory import setup_memory_store
 from commerce_resolve.models import Interpretation, InterpretationContext
@@ -45,39 +47,7 @@ class SpyRegisteredInterpreter:
     ) -> Interpretation:
         """识别测试用自定义订单号，其余政策语义使用确定性规则。"""
 
-        import re
-
         self.calls.append(text)
-        match = re.search(r"\bORD-[A-Z0-9-]{3,32}\b", text, re.IGNORECASE)
-        if any(
-            keyword in text
-            for keyword in ("二线客服", "高级客服", "升级处理", "复杂售后")
-        ):
-            return Interpretation(
-                intent="l2_support_request",
-                order_id=match.group(0).upper() if match is not None else None,
-                l2_issue_summary=text[:500],
-            )
-        if "退款" in text or (context is not None and context.pending_refund_request):
-            from commerce_resolve.models import RefundReason
-
-            reason = (
-                RefundReason(code="quality_issue")
-                if "质量" in text
-                else RefundReason(code="no_longer_needed")
-                if "不想要" in text
-                else None
-            )
-            return Interpretation(
-                intent="refund_request",
-                order_id=match.group(0).upper() if match is not None else None,
-                refund_reason=reason,
-            )
-        if match is not None:
-            return Interpretation(
-                intent="order_inquiry",
-                order_id=match.group(0).upper(),
-            )
         return self._policy_interpreter.interpret(text, context)
 
 
@@ -114,16 +84,28 @@ class WebHarness:
         assert response.status_code == 200
         return response.json()
 
-    def mutation_headers(self, csrf_token: str) -> dict[str, str]:
-        """构造通过同源与同步 CSRF 校验的写请求 Header。"""
+    def mutation_headers(self, csrf_token: str | None) -> dict[str, str]:
+        """构造同源写请求 Header，并仅在存在登录 Token 时携带 CSRF。"""
 
-        return {"Origin": ORIGIN, "X-CSRF-Token": csrf_token}
+        headers = {"Origin": ORIGIN}
+        if csrf_token:
+            headers["X-CSRF-Token"] = csrf_token
+        return headers
+
+    def current_username(self) -> str:
+        """从当前 Cookie 解析账号名，且不轮换同步 CSRF Token。"""
+
+        token = self.client.cookies.get(self.services.settings.cookie_name)
+        assert token is not None
+        identity = self.repository.resolve_session(token)
+        assert identity is not None and identity.username is not None
+        return identity.username
 
     def register_and_login(self, username: str) -> dict[str, object]:
         """通过一次性邀请码注册并登录，返回轮换后的会话响应。"""
 
         session = self.session()
-        csrf = str(session["csrf_token"])
+        csrf = session.get("csrf_token")
         invite = self.repository.create_invitation()
         registered = self.client.post(
             "/api/auth/register",
@@ -143,6 +125,31 @@ class WebHarness:
         assert logged_in.status_code == 200
         return logged_in.json()
 
+    def first_order_id(self) -> str:
+        """返回当前注册账号工作区中的第一笔演示订单号。"""
+
+        response = self.client.get("/api/support/orders")
+        assert response.status_code == 200
+        orders = response.json()["orders"]
+        assert orders
+        return str(orders[0]["order_id"])
+
+    def create_order_conversation(
+        self,
+        headers: dict[str, str],
+        order_id: str | None = None,
+    ) -> dict[str, object]:
+        """创建或恢复当前账号指定订单的活动会话。"""
+
+        target_order_id = order_id or self.first_order_id()
+        response = self.client.post(
+            "/api/conversations",
+            headers=headers,
+            json={"related_order_id": target_order_id},
+        )
+        assert response.status_code in {200, 201}
+        return response.json()
+
     def latest_public_response(self, thread_id: str) -> dict[str, object]:
         """从服务端公开历史还原最近一条助手响应，供异步 Run 验收。"""
 
@@ -158,6 +165,60 @@ class WebHarness:
             "assistant_message": assistant["content"],
             **assistant["payload"],
         }
+
+    def seed_order(self, username: str, payload: dict[str, object]):
+        """模拟后台维护者向指定客户的权威工作区写入 Mock 订单。"""
+
+        target = next(
+            item
+            for item in SqliteAdminRepository(self.repository.engine).list_customers()
+            if item.username == username
+        )
+        return self.repository.create_order(
+            user_id=target.user_id,
+            workspace_id=target.workspace_id,
+            data=OrderCreate.model_validate(payload),
+        )
+
+    def update_seeded_order(
+        self,
+        username: str,
+        order_id: str,
+        payload: dict[str, object],
+    ):
+        """模拟后台维护者修改指定客户的既有 Mock 订单。"""
+
+        target = next(
+            item
+            for item in SqliteAdminRepository(self.repository.engine).list_customers()
+            if item.username == username
+        )
+        return self.repository.update_order(
+            user_id=target.user_id,
+            workspace_id=target.workspace_id,
+            order_id=order_id,
+            data=OrderUpdate.model_validate(payload),
+        )
+
+    def seed_payment(
+        self,
+        username: str,
+        order_id: str,
+        payload: dict[str, object],
+    ):
+        """模拟后台维护者向指定客户订单写入退款前 Mock 支付。"""
+
+        target = next(
+            item
+            for item in SqliteAdminRepository(self.repository.engine).list_customers()
+            if item.username == username
+        )
+        return self.services.require_refund_repository().upsert_payment(
+            user_id=target.user_id,
+            workspace_id=target.workspace_id,
+            order_id=order_id,
+            data=MockPaymentInput.model_validate(payload),
+        )
 
 
 @pytest.fixture
@@ -182,6 +243,8 @@ def web_harness(tmp_path: Path) -> WebHarness:
         policy_source_path=source,
         policy_index_db_path=policy_database,
         memory_db_path=memory_database,
+        eval_run_root=tmp_path / "eval-runs",
+        eval_baseline_path=tmp_path / "offline-baseline.json",
         frontend_dist_path=tmp_path / "dist",
         allowed_origins=(ORIGIN,),
     )

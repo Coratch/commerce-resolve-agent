@@ -115,6 +115,42 @@ def test_sqlite_keeps_threads_isolated(tmp_path) -> None:
         assert graph.get_state(second_config).values == {}
 
 
+def test_sqlite_restores_intent_clarification_attempts_in_a_new_graph(
+    tmp_path: Path,
+) -> None:
+    """验证关闭连接并重建 Graph 后仍保留意图澄清次数。"""
+
+    database = tmp_path / "checkpoints.sqlite"
+    config = {"configurable": {"thread_id": "restore-clarification-001"}}
+    context = RunContext(user_id="user-001")
+    first_dependencies, _, _, _ = _build_dependencies()
+
+    with open_sqlite_checkpointer(database) as checkpointer:
+        first_graph = build_workflow(first_dependencies, checkpointer)
+        first = first_graph.invoke(
+            {"messages": [{"role": "user", "content": "你好"}]},
+            config=config,
+            context=context,
+        )
+
+    second_dependencies, _, order_gateway, logistics_gateway = _build_dependencies()
+    with open_sqlite_checkpointer(database) as checkpointer:
+        second_graph = build_workflow(second_dependencies, checkpointer)
+        restored = second_graph.get_state(config)
+        second = second_graph.invoke(
+            {"messages": [{"role": "user", "content": "还是不确定"}]},
+            config=config,
+            context=context,
+        )
+
+    assert first["status"] == "awaiting_intent_clarification"
+    assert restored.values["intent_clarification_attempts"] == 1
+    assert second["status"] == "awaiting_intent_clarification"
+    assert second["intent_clarification_attempts"] == 2
+    assert order_gateway.calls == []
+    assert logistics_gateway.calls == []
+
+
 def test_sqlite_rejects_a_different_user_on_the_same_thread(tmp_path) -> None:
     """验证不同用户不能继续已经绑定身份的 thread。"""
 

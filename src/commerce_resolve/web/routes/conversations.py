@@ -20,8 +20,7 @@ from commerce_resolve.workflow import build_workflow
 from ..dependencies import (
     RequestAccess,
     get_services,
-    require_mutation_access,
-    resolve_request_access,
+    require_registered_access,
 )
 from ..errors import api_error
 from ..schemas import (
@@ -115,11 +114,9 @@ def list_conversations(
     limit: int = Query(default=20, ge=1, le=50),
     cursor: str | None = None,
 ) -> ConversationListResponse:
-    """列出当前账号或游客 Session 自己的活动/归档会话。"""
+    """列出当前注册账号自己的活动或归档会话。"""
 
-    access = resolve_request_access(request)
-    if access.principal.mode == "guest" and lifecycle_status != "active":
-        raise api_error(403, "guest_conversation_scope")
+    access = require_registered_access(request, mutation=False)
     items = (
         get_services(request)
         .require_conversation_repository()
@@ -142,7 +139,7 @@ def list_conversations(
 def get_conversation(thread_id: str, request: Request) -> ConversationDetailResponse:
     """返回当前身份可访问的会话摘要与待处理状态。"""
 
-    access = resolve_request_access(request)
+    access = require_registered_access(request, mutation=False)
     return ConversationDetailResponse(
         conversation=_authorized_summary(request, access, thread_id)
     )
@@ -160,7 +157,7 @@ def list_messages(
 ) -> ConversationMessagesResponse:
     """分页返回持久公开历史，不读取或反序列化 Checkpoint 消息。"""
 
-    access = resolve_request_access(request)
+    access = require_registered_access(request, mutation=False)
     summary = _authorized_summary(request, access, thread_id)
     items = (
         get_services(request)
@@ -192,7 +189,10 @@ def submit_message(
     """原子接受消息后独立执行 Graph，并立即返回可查询 Run。"""
 
     services = get_services(request)
-    access = require_mutation_access(request)
+    access = require_registered_access(request, mutation=True)
+    summary = _authorized_summary(request, access, thread_id)
+    if summary.related_order_id is None:
+        raise api_error(409, "order_context_required")
     try:
         accepted = services.require_conversation_repository().accept_chat_message(
             thread_id=thread_id,
@@ -221,7 +221,7 @@ def submit_message(
 def get_run(thread_id: str, run_id: str, request: Request) -> AgentRunResponse:
     """读取授权会话中指定 Run 的当前公开状态。"""
 
-    access = resolve_request_access(request)
+    access = require_registered_access(request, mutation=False)
     _authorized_summary(request, access, thread_id)
     run = (
         get_services(request)
@@ -251,7 +251,7 @@ def retry_run(
     """仅对 failed/interrupted Run 创建一次显式、幂等的新执行。"""
 
     services = get_services(request)
-    access = require_mutation_access(request)
+    access = require_registered_access(request, mutation=True)
     _authorized_summary(request, access, thread_id)
     repository = services.require_conversation_repository()
     original = repository.get_run(run_id, thread_id=thread_id)
@@ -319,7 +319,7 @@ def stream_run_events(
 ) -> StreamingResponse:
     """重放缺失事件并跟随当前 Run，终态送达后关闭 SSE。"""
 
-    access = resolve_request_access(request)
+    access = require_registered_access(request, mutation=False)
     _authorized_summary(request, access, thread_id)
     repository = get_services(request).require_conversation_repository()
     run = repository.get_run(run_id, thread_id=thread_id)
@@ -388,7 +388,7 @@ def update_lifecycle(
 ) -> ConversationDetailResponse:
     """允许注册用户归档或恢复本人会话，游客不维护归档列表。"""
 
-    access = require_mutation_access(request)
+    access = require_registered_access(request, mutation=True)
     if access.principal.mode != "registered":
         raise api_error(403, "guest_conversation_scope")
     if payload.lifecycle_status == "archived" and _checkpoint_has_pending_action(
@@ -417,7 +417,7 @@ def delete_conversation(thread_id: str, request: Request) -> Response:
     """先写 deleting 墓碑，再清理 Checkpoint 和公开交互数据。"""
 
     services = get_services(request)
-    access = require_mutation_access(request)
+    access = require_registered_access(request, mutation=True)
     repository = services.require_conversation_repository()
     _authorized_summary(request, access, thread_id)
     if _checkpoint_has_pending_action(request, thread_id):

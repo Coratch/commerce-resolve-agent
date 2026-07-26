@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from commerce_resolve.l2_models import L2RuntimeState, L2UpgradePreview
+from commerce_resolve.service_resolution import ServiceResolution
 from commerce_resolve.web.dependencies import RequestAccess, WebServices
 from commerce_resolve.web.schemas import (
     ChatResponse,
@@ -93,6 +94,12 @@ def project_chat_response(
                     )
                 )
     action = pending_action(state, next_nodes)
+    service_resolution = state.get("service_resolution")
+    if service_resolution is not None and not isinstance(
+        service_resolution,
+        ServiceResolution,
+    ):
+        raise ConversationProjectionError("invalid_service_resolution")
     return ChatResponse(
         thread_id=thread_id,
         assistant_message=assistant_message,
@@ -118,6 +125,7 @@ def project_chat_response(
         l2_pending_action=action,
         l2_trace_events=trace_events,
         memory_proposal=(memory_proposal if action == "memory_confirmation" else None),
+        service_resolution=service_resolution,
     )
 
 

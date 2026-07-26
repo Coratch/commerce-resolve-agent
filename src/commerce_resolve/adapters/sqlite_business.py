@@ -29,29 +29,42 @@ from commerce_resolve.business_models import (
     InvitationIssued,
     LlmUsageRecord,
     OrderCreate,
+    OrderItemInput,
+    OrderItemRecord,
     OrderRecord,
     OrderStatus,
     OrderUpdate,
+    PaymentCurrency,
     RegistrationResult,
     SessionBundle,
     SessionIdentity,
+    ShipmentInput,
+    ShipmentPackageInput,
+    ShipmentPackageItemRecord,
+    ShipmentPackageRecord,
     ShipmentRecord,
     ShipmentStatus,
     UserAccount,
+    UserRole,
     UserStatus,
     WebActorType,
     Workspace,
+    WorkspaceDatasetStatus,
 )
 from commerce_resolve.models import OrderView, ShipmentView, ToolResult
+from commerce_resolve.portfolio_demo import PortfolioDataError, PortfolioDemoService
 
 from .sqlalchemy_models import (
     ConversationRow,
     InvitationRow,
     LlmDailyUsageRow,
     MockPaymentRow,
+    OrderItemRow,
     OrderRow,
     RefundActionRow,
     RefundAuditEventRow,
+    ShipmentPackageItemRow,
+    ShipmentPackageRow,
     ShipmentRow,
     UserRow,
     WebSessionRow,
@@ -60,7 +73,12 @@ from .sqlalchemy_models import (
 )
 
 DEMO_WORKSPACE_ID = "demo"
-MIGRATIONS_ROOT = Path(__file__).resolve().parents[3] / "migrations"
+_PACKAGED_MIGRATIONS_ROOT = Path(__file__).resolve().parents[1] / "migrations"
+MIGRATIONS_ROOT = (
+    _PACKAGED_MIGRATIONS_ROOT
+    if _PACKAGED_MIGRATIONS_ROOT.is_dir()
+    else Path(__file__).resolve().parents[3] / "migrations"
+)
 
 
 class BusinessDataError(ValueError):
@@ -129,6 +147,17 @@ def upgrade_business_database(database: str | Path) -> None:
     command.upgrade(_alembic_config(path), "head")
 
 
+def business_schema_head() -> str:
+    """返回当前代码支持的唯一 Alembic Head revision。"""
+
+    head = ScriptDirectory.from_config(
+        _alembic_config(Path("unused.sqlite"))
+    ).get_current_head()
+    if head is None:
+        raise RuntimeError("业务数据库迁移缺少 Head")
+    return head
+
+
 def assert_business_schema_current(engine: Engine, database: str | Path) -> None:
     """验证业务数据库位于 Alembic head，否则拒绝启动服务。"""
 
@@ -149,13 +178,15 @@ class SqliteBusinessRepository:
         *,
         password_service: PasswordService | None = None,
         now_provider: Callable[[], datetime] = utc_now,
+        portfolio_service: PortfolioDemoService | None = None,
     ) -> None:
-        """保存 Engine、密码服务和可替换时钟以支持确定性测试。"""
+        """保存 Engine、密码服务、演示数据服务和可替换时钟。"""
 
         self.engine = engine
         self._sessions = sessionmaker(engine, expire_on_commit=False)
         self._passwords = password_service or PasswordService()
         self._now = now_provider
+        self._portfolio = portfolio_service or PortfolioDemoService()
 
     def _now_utc(self) -> datetime:
         """读取并规范化当前 UTC 时间。"""
@@ -209,7 +240,7 @@ class SqliteBusinessRepository:
         password: str,
         invitation_code: str,
     ) -> RegistrationResult:
-        """原子消费邀请码并创建唯一账号与私有工作区。"""
+        """原子消费邀请码，并创建账号、工作区与完整演示数据。"""
 
         normalized = normalize_username(username)
         password_hash = self._passwords.hash(password)
@@ -235,27 +266,43 @@ class SqliteBusinessRepository:
                     username_normalized=normalized,
                     password_hash=password_hash,
                     status="active",
+                    role="customer",
                     created_at=now,
                 )
                 workspace = WorkspaceRow(
                     id=workspace_id,
                     owner_user_id=user_id,
+                    dataset_status="initializing",
+                    reset_generation=0,
                     created_at=now,
                 )
                 session.add_all((user, workspace))
                 session.flush()
+                self._portfolio.seed_into_session(
+                    session,
+                    user_id=user_id,
+                    workspace_id=workspace_id,
+                    now=now,
+                )
         except IntegrityError:
             raise AuthDomainError("account_unavailable") from None
+        except PortfolioDataError:
+            raise AuthDomainError("registration_initialization_failed") from None
         return RegistrationResult(
             user=UserAccount(
                 id=user_id,
                 username=normalized,
                 status="active",
+                role="customer",
                 created_at=now,
             ),
             workspace=Workspace(
                 id=workspace_id,
                 owner_user_id=user_id,
+                dataset_version=workspace.dataset_version,
+                dataset_status=workspace.dataset_status,
+                reset_generation=workspace.reset_generation,
+                initialized_at=workspace.initialized_at,
                 created_at=now,
             ),
         )
@@ -294,6 +341,7 @@ class SqliteBusinessRepository:
         user_id: str | None,
         workspace_id: str,
         username: str | None,
+        user_role: UserRole | None,
         ttl_hours: int,
     ) -> SessionBundle:
         """创建仅在返回值中暴露明文 Token 的浏览器 Session。"""
@@ -322,6 +370,7 @@ class SqliteBusinessRepository:
             user_id=user_id,
             workspace_id=workspace_id,
             username=username,
+            user_role=user_role,
             expires_at=_as_utc(row.expires_at),
         )
 
@@ -335,6 +384,7 @@ class SqliteBusinessRepository:
             user_id=None,
             workspace_id=DEMO_WORKSPACE_ID,
             username=None,
+            user_role=None,
             ttl_hours=ttl_hours,
         )
 
@@ -352,6 +402,7 @@ class SqliteBusinessRepository:
             user_id=registration.user.id,
             workspace_id=registration.workspace.id,
             username=registration.user.username,
+            user_role=registration.user.role,
             ttl_hours=ttl_hours,
         )
 
@@ -392,6 +443,7 @@ class SqliteBusinessRepository:
                 workspace_id=workspace.id,
                 username=user.username_normalized,
                 user_status=cast(UserStatus, user.status),
+                user_role=cast(UserRole, user.role),
                 expires_at=_as_utc(row.expires_at),
             )
 
@@ -452,8 +504,9 @@ class SqliteBusinessRepository:
         subject_id: str,
         workspace_id: str,
         access_mode: WebActorType,
+        related_order_id: str | None = None,
     ) -> ConversationRecord:
-        """创建由服务端身份绑定的随机 conversation thread。"""
+        """创建由服务端身份和可选可信订单绑定的随机 conversation thread。"""
 
         now = self._now_utc()
         row = ConversationRow(
@@ -461,6 +514,7 @@ class SqliteBusinessRepository:
             subject_id=subject_id,
             workspace_id=workspace_id,
             access_mode=access_mode,
+            related_order_id=related_order_id,
             title="新会话",
             lifecycle_status="active",
             history_state="complete",
@@ -472,6 +526,60 @@ class SqliteBusinessRepository:
         with self._sessions.begin() as session:
             session.add(row)
         return self._to_conversation(row)
+
+    def get_or_create_order_conversation(
+        self,
+        *,
+        subject_id: str,
+        workspace_id: str,
+        order_id: str,
+    ) -> tuple[ConversationRecord, bool]:
+        """原子恢复或创建当前工作区某订单唯一活动任务。"""
+
+        def active_row(session: Session) -> ConversationRow | None:
+            """按完整注册身份作用域读取订单的活动任务。"""
+
+            return session.scalar(
+                select(ConversationRow).where(
+                    ConversationRow.subject_id == subject_id,
+                    ConversationRow.workspace_id == workspace_id,
+                    ConversationRow.access_mode == "registered",
+                    ConversationRow.related_order_id == order_id,
+                    ConversationRow.lifecycle_status == "active",
+                )
+            )
+
+        with self._sessions() as session:
+            existing = active_row(session)
+            if existing is not None:
+                return self._to_conversation(existing), False
+
+        now = self._now_utc()
+        row = ConversationRow(
+            thread_id=str(uuid4()),
+            subject_id=subject_id,
+            workspace_id=workspace_id,
+            access_mode="registered",
+            related_order_id=order_id,
+            title=f"订单 {order_id} 售后任务",
+            lifecycle_status="active",
+            history_state="complete",
+            message_count=0,
+            next_message_sequence=1,
+            created_at=now,
+            updated_at=now,
+        )
+        try:
+            with self._sessions.begin() as session:
+                session.add(row)
+                session.flush()
+            return self._to_conversation(row), True
+        except IntegrityError:
+            with self._sessions() as session:
+                existing = active_row(session)
+                if existing is None:
+                    raise BusinessDataError("conversation_conflict") from None
+                return self._to_conversation(existing), False
 
     def get_authorized_conversation(
         self,
@@ -518,6 +626,8 @@ class SqliteBusinessRepository:
             order_id=data.order_id.upper(),
             user_id=user_id,
             status=data.status,
+            demo_scenario_id=data.demo_scenario_id,
+            catalog_version=data.catalog_version,
             created_at=now,
             updated_at=now,
         )
@@ -526,19 +636,31 @@ class SqliteBusinessRepository:
                 self._require_workspace_owner(session, user_id, workspace_id)
                 session.add(order)
                 session.flush()
-                if data.shipment is not None:
+                shipment_input = data.shipment or self._package_shipment_summary(
+                    data.packages
+                )
+                if shipment_input is not None:
                     session.add(
                         ShipmentRow(
                             id=str(uuid4()),
                             workspace_id=workspace_id,
                             order_pk=order.id,
-                            status=data.shipment.status,
-                            last_event=data.shipment.last_event,
-                            estimated_delivery_at=(data.shipment.estimated_delivery_at),
+                            status=shipment_input.status,
+                            last_event=shipment_input.last_event,
+                            estimated_delivery_at=(
+                                shipment_input.estimated_delivery_at
+                            ),
                             created_at=now,
                             updated_at=now,
                         )
                     )
+                self._replace_order_items(session, order, data.items, now=now)
+                self._replace_shipment_packages(
+                    session,
+                    order,
+                    data.packages,
+                    now=now,
+                )
         except IntegrityError:
             raise BusinessDataError("order_conflict") from None
         return self.get_order_record(
@@ -629,6 +751,42 @@ class SqliteBusinessRepository:
                     shipment.last_event = data.shipment.last_event
                     shipment.estimated_delivery_at = data.shipment.estimated_delivery_at
                     shipment.updated_at = now
+            if data.items is not None:
+                existing_items = self._order_items(session, row.id)
+                normalized_existing = tuple(
+                    (
+                        item.sku,
+                        item.title,
+                        item.quantity,
+                        item.product_category,
+                        item.product_ref,
+                        item.variant_title,
+                        item.unit_amount_minor,
+                        item.currency,
+                        item.image_ref,
+                        item.catalog_version,
+                    )
+                    for item in existing_items
+                )
+                normalized_new = tuple(
+                    (
+                        item.sku.upper(),
+                        item.title,
+                        item.quantity,
+                        item.product_category,
+                        item.product_ref,
+                        item.variant_title,
+                        item.unit_amount_minor,
+                        item.currency,
+                        item.image_ref,
+                        item.catalog_version,
+                    )
+                    for item in data.items
+                )
+                if normalized_existing != normalized_new:
+                    self._clear_shipment_packages(session, row.id)
+                    self._replace_order_items(session, row, data.items, now=now)
+                    changed = True
             if changed:
                 self._invalidate_pending_refund_actions(
                     session,
@@ -806,6 +964,7 @@ class SqliteBusinessRepository:
             id=row.id,
             username=row.username_normalized,
             status=cast(UserStatus, row.status),
+            role=cast(UserRole, row.role),
             created_at=_as_utc(row.created_at),
         )
 
@@ -815,6 +974,12 @@ class SqliteBusinessRepository:
         return Workspace(
             id=row.id,
             owner_user_id=row.owner_user_id,
+            dataset_version=row.dataset_version,
+            dataset_status=cast(WorkspaceDatasetStatus | None, row.dataset_status),
+            reset_generation=row.reset_generation,
+            initialized_at=(
+                _as_utc(row.initialized_at) if row.initialized_at is not None else None
+            ),
             created_at=_as_utc(row.created_at),
         )
 
@@ -826,6 +991,7 @@ class SqliteBusinessRepository:
             subject_id=row.subject_id,
             workspace_id=row.workspace_id,
             access_mode=cast(WebActorType, row.access_mode),
+            related_order_id=row.related_order_id,
             title=row.title,
             lifecycle_status=row.lifecycle_status,
             history_state=row.history_state,
@@ -870,8 +1036,200 @@ class SqliteBusinessRepository:
             workspace_id=row.workspace_id,
             status=cast(OrderStatus, row.status),
             shipment=shipment,
+            items=tuple(
+                OrderItemRecord(
+                    sku=item.sku,
+                    title=item.title,
+                    quantity=item.quantity,
+                    product_category=item.product_category,
+                    product_ref=item.product_ref,
+                    variant_title=item.variant_title,
+                    unit_amount_minor=item.unit_amount_minor,
+                    currency=cast(PaymentCurrency | None, item.currency),
+                    image_ref=item.image_ref,
+                    catalog_version=item.catalog_version,
+                    created_at=_as_utc(item.created_at),
+                    updated_at=_as_utc(item.updated_at),
+                )
+                for item in self._order_items(session, row.id)
+            ),
+            packages=self._shipment_package_records(session, row.id),
+            demo_scenario_id=row.demo_scenario_id,
+            catalog_version=row.catalog_version,
             created_at=_as_utc(row.created_at),
             updated_at=_as_utc(row.updated_at),
+        )
+
+    def _order_items(self, session: Session, order_pk: str) -> list[OrderItemRow]:
+        """按稳定 SKU 顺序读取订单商品行。"""
+
+        return list(
+            session.scalars(
+                select(OrderItemRow)
+                .where(OrderItemRow.order_pk == order_pk)
+                .order_by(OrderItemRow.sku)
+            ).all()
+        )
+
+    def _replace_order_items(
+        self,
+        session: Session,
+        order: OrderRow,
+        items: tuple[OrderItemInput, ...],
+        *,
+        now: datetime,
+    ) -> None:
+        """在订单事务内用已校验商品行替换旧集合。"""
+
+        for row in self._order_items(session, order.id):
+            session.delete(row)
+        session.flush()
+        session.add_all(
+            OrderItemRow(
+                id=str(uuid4()),
+                order_pk=order.id,
+                sku=item.sku.upper(),
+                title=item.title,
+                quantity=item.quantity,
+                product_category=item.product_category,
+                product_ref=item.product_ref,
+                variant_title=item.variant_title,
+                unit_amount_minor=item.unit_amount_minor,
+                currency=item.currency,
+                image_ref=item.image_ref,
+                catalog_version=item.catalog_version,
+                created_at=now,
+                updated_at=now,
+            )
+            for item in items
+        )
+        session.flush()
+
+    def _replace_shipment_packages(
+        self,
+        session: Session,
+        order: OrderRow,
+        packages: tuple[ShipmentPackageInput, ...],
+        *,
+        now: datetime,
+    ) -> None:
+        """写入已校验包裹和商品分配；调用方负责同一订单事务。"""
+
+        self._clear_shipment_packages(session, order.id)
+        if not packages:
+            return
+        order_items = {
+            item.sku.upper(): item for item in self._order_items(session, order.id)
+        }
+        for package in packages:
+            package_row = ShipmentPackageRow(
+                id=str(uuid4()),
+                workspace_id=order.workspace_id,
+                order_pk=order.id,
+                package_id=package.package_id.upper(),
+                carrier=package.carrier,
+                tracking_number=package.tracking_number,
+                status=package.status,
+                last_event=package.last_event,
+                estimated_delivery_at=package.estimated_delivery_at,
+                created_at=now,
+                updated_at=now,
+            )
+            session.add(package_row)
+            session.flush()
+            session.add_all(
+                ShipmentPackageItemRow(
+                    id=str(uuid4()),
+                    package_pk=package_row.id,
+                    order_item_pk=order_items[item.sku.upper()].id,
+                    quantity=item.quantity,
+                )
+                for item in package.items
+            )
+
+    def _clear_shipment_packages(self, session: Session, order_pk: str) -> None:
+        """删除订单既有包裹，依赖外键级联移除商品分配。"""
+
+        rows = session.scalars(
+            select(ShipmentPackageRow).where(ShipmentPackageRow.order_pk == order_pk)
+        ).all()
+        for row in rows:
+            session.delete(row)
+        session.flush()
+
+    def _shipment_package_records(
+        self,
+        session: Session,
+        order_pk: str,
+    ) -> tuple[ShipmentPackageRecord, ...]:
+        """按包裹标识稳定读取多包裹履约事实。"""
+
+        package_rows = session.scalars(
+            select(ShipmentPackageRow)
+            .where(ShipmentPackageRow.order_pk == order_pk)
+            .order_by(ShipmentPackageRow.package_id)
+        ).all()
+        records: list[ShipmentPackageRecord] = []
+        for package in package_rows:
+            assignments = session.execute(
+                select(
+                    OrderItemRow.sku,
+                    ShipmentPackageItemRow.quantity,
+                )
+                .join(
+                    ShipmentPackageItemRow,
+                    ShipmentPackageItemRow.order_item_pk == OrderItemRow.id,
+                )
+                .where(ShipmentPackageItemRow.package_pk == package.id)
+                .order_by(OrderItemRow.sku)
+            ).all()
+            records.append(
+                ShipmentPackageRecord(
+                    package_id=package.package_id,
+                    carrier=package.carrier,
+                    tracking_number=package.tracking_number,
+                    status=cast(ShipmentStatus, package.status),
+                    last_event=package.last_event,
+                    estimated_delivery_at=package.estimated_delivery_at,
+                    items=tuple(
+                        ShipmentPackageItemRecord(sku=sku, quantity=quantity)
+                        for sku, quantity in assignments
+                    ),
+                    updated_at=_as_utc(package.updated_at),
+                )
+            )
+        return tuple(records)
+
+    @staticmethod
+    def _package_shipment_summary(
+        packages: tuple[ShipmentPackageInput, ...],
+    ) -> ShipmentInput | None:
+        """从多包裹状态确定性生成兼容的一对一物流摘要。"""
+
+        if not packages:
+            return None
+        ordered = sorted(packages, key=lambda item: item.package_id)
+        if all(item.status == "delivered" for item in ordered):
+            status = "delivered"
+            representative = ordered[-1]
+        elif any(item.status in {"in_transit", "delivered"} for item in ordered):
+            status = "in_transit"
+            representative = next(
+                (item for item in ordered if item.status == "in_transit"),
+                ordered[-1],
+            )
+        else:
+            status = "preparing"
+            representative = ordered[0]
+        estimates = [
+            item.estimated_delivery_at
+            for item in ordered
+            if item.estimated_delivery_at is not None
+        ]
+        return ShipmentInput(
+            status=status,
+            last_event=representative.last_event,
+            estimated_delivery_at=max(estimates) if estimates else None,
         )
 
 

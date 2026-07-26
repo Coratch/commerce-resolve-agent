@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 import os
 import time
 from datetime import UTC, datetime
@@ -34,7 +35,7 @@ from commerce_resolve.models import Interpretation, InterpretationContext
 
 PROVIDER_PROFILE_ID = "openai-compatible-v0.8"
 PROVIDER_PROFILE_VERSION = "1.0"
-PROVIDER_DATASET_PATH = Path("data/eval/provider-qualification-v1.json")
+PROVIDER_DATASET_PATH = Path("data/eval/v2.0/provider-qualification.json")
 DECISION_ADAPTER = TypeAdapter(L2Decision)
 
 
@@ -82,7 +83,7 @@ class ProviderDataset(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     dataset_version: str
-    scenarios: tuple[ProviderScenario, ...] = Field(min_length=20, max_length=20)
+    scenarios: tuple[ProviderScenario, ...] = Field(min_length=12, max_length=100)
 
 
 class ProviderScenarioResult(BaseModel):
@@ -201,7 +202,7 @@ class FixtureL2Provider:
 
 
 def load_provider_dataset(path: Path) -> ProviderDataset:
-    """读取严格的 20 条版本化合成 Provider 场景。"""
+    """读取至少 12 条的版本化合成 Provider 场景。"""
 
     dataset = ProviderDataset.model_validate_json(path.read_text("utf-8"))
     ids = [scenario.scenario_id for scenario in dataset.scenarios]
@@ -263,6 +264,12 @@ def _match_interpretation(
         passed = passed and actual.refund_reason is not None
         if actual.refund_reason is not None:
             passed = passed and actual.refund_reason.code == expected.refund_reason.code
+    if expected.intent == "service_guidance":
+        passed = (
+            passed
+            and set(actual.concerns) == set(expected.concerns)
+            and bool(actual.goal_summary and actual.goal_summary.strip())
+        )
     return passed, None, None, None, ()
 
 
@@ -480,8 +487,9 @@ def run_provider_qualification(
             for item in repetition_results
             if item.evidence_recall is not None
         ]
+        required_task_passes = math.ceil(len(repetition_results) * 0.90)
         per_repetition_pass = per_repetition_pass and (
-            sum(item.task_passed for item in repetition_results) >= 18
+            sum(item.task_passed for item in repetition_results) >= required_task_passes
             and sum(item.structured_valid for item in repetition_results)
             / len(repetition_results)
             >= 0.95

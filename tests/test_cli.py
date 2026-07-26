@@ -59,7 +59,7 @@ def test_cli_runs_the_v0_2_policy_eval_suite(capsys) -> None:
 
 
 def test_cli_defaults_to_all_eval_suites(capsys) -> None:
-    """验证不指定 suite 时保留五个版本报告和总门禁。"""
+    """验证不指定 suite 时只运行与 v2.0 兼容的当前发布门禁。"""
 
     exit_code = main(["eval"])
 
@@ -68,29 +68,130 @@ def test_cli_defaults_to_all_eval_suites(capsys) -> None:
     assert exit_code == 0
     assert captured.err == ""
     assert report["suite"] == "all"
+    assert report["profile_version"] == "v2.0"
     assert report["passed"] is True
     assert report["reports"]["v0.1"]["total_scenarios"] == 15
     assert report["reports"]["v0.2"]["total_scenarios"] == 20
-    assert report["reports"]["v0.3"]["total_scenarios"] == 20
     assert report["reports"]["v0.4"]["total_scenarios"] == 24
     assert report["reports"]["v0.5"]["total_scenarios"] == 30
     assert report["reports"]["v0.6"]["total_scenarios"] == 32
     assert report["reports"]["v0.7"]["total_scenarios"] == 36
     assert report["reports"]["v0.8"]["total_scenarios"] == 40
+    assert report["reports"]["v1.0"]["total_scenarios"] == 32
+    assert report["reports"]["v2.0"]["total_scenarios"] == 36
+    assert report["aggregate_metrics"]["scenario_total"] == 265
+    assert report["archived_suites"] == [
+        "v0.3",
+        "v1.1",
+        "v1.2",
+        "v1.3",
+        "v1.3.1",
+        "v1.3.2",
+    ]
 
 
-def test_cli_runs_the_v0_3_web_eval_suite(capsys) -> None:
-    """验证 CLI 可以单独运行二十个 Web 身份与隔离场景。"""
+def test_cli_keeps_the_v1_2_suite_as_a_non_passing_history(capsys) -> None:
+    """验证被 v2.0 取代的后台 CRUD 契约仍可回放但不阻断当前发布。"""
+
+    exit_code = main(["eval", "--suite", "v1.2"])
+
+    captured = capsys.readouterr()
+    report = json.loads(captured.out)
+    assert exit_code == 1
+    assert captured.err == ""
+    assert report["total_scenarios"] == 40
+    assert report["admin_surface_safety_violations"] == 0
+    assert report["passed"] is False
+
+
+def test_cli_keeps_the_v1_3_suite_as_a_non_passing_history(capsys) -> None:
+    """验证旧目录和发布版本场景仍可回放并如实暴露契约漂移。"""
+
+    exit_code = main(["eval", "--suite", "v1.3"])
+
+    captured = capsys.readouterr()
+    report = json.loads(captured.out)
+    assert exit_code == 1
+    assert captured.err == ""
+    assert report["total_scenarios"] == 48
+    assert report["commercial_experience_safety_violations"] == 0
+    assert report["passed"] is False
+
+
+def test_cli_keeps_the_v1_3_1_suite_as_a_non_passing_history(capsys) -> None:
+    """验证已删除旧聊天页后历史可信度 Suite 返回失败而不是异常。"""
+
+    exit_code = main(["eval", "--suite", "v1.3.1"])
+
+    captured = capsys.readouterr()
+    report = json.loads(captured.out)
+    assert exit_code == 1
+    assert captured.err == ""
+    assert report["total_scenarios"] == 32
+    assert report["commercial_credibility_safety_violations"] == 0
+    assert report["passed"] is False
+
+
+def test_cli_keeps_the_v1_3_2_suite_as_a_non_passing_history(capsys) -> None:
+    """验证被悬浮 Agent 取代的旧界面 Suite 返回失败而不是异常。"""
+
+    exit_code = main(["eval", "--suite", "v1.3.2"])
+
+    captured = capsys.readouterr()
+    report = json.loads(captured.out)
+    assert exit_code == 1
+    assert captured.err == ""
+    assert report["total_scenarios"] == 24
+    assert report["immersive_interface_safety_violations"] == 0
+    assert report["passed"] is False
+
+
+def test_cli_grants_lists_and_revokes_admin_role(capsys, tmp_path: Path) -> None:
+    """验证只有受控本机 CLI 能显式维护既有账号管理员角色。"""
+
+    database = tmp_path / "business.sqlite"
+    upgrade_business_database(database)
+    engine = create_business_engine(database)
+    repository = SqliteBusinessRepository(engine)
+    invitation = repository.create_invitation()
+    repository.register(
+        username="cli.operator",
+        password="correct horse battery",
+        invitation_code=invitation.code,
+    )
+    engine.dispose()
+
+    granted = main(
+        ["admin", "grant", "cli.operator"],
+        business_db_path=database,
+    )
+    grant_payload = json.loads(capsys.readouterr().out)
+    listed = main(["admin", "list"], business_db_path=database)
+    list_payload = json.loads(capsys.readouterr().out)
+    revoked = main(
+        ["admin", "revoke", "cli.operator"],
+        business_db_path=database,
+    )
+    revoke_payload = json.loads(capsys.readouterr().out)
+
+    assert granted == listed == revoked == 0
+    assert grant_payload["role"] == "admin"
+    assert list_payload == [
+        {"username": "cli.operator", "status": "active", "role": "admin"}
+    ]
+    assert revoke_payload["role"] == "customer"
+
+
+def test_cli_keeps_the_v0_3_guest_suite_as_a_non_passing_history(capsys) -> None:
+    """验证已删除游客模式后历史 Web Suite 如实失败而不伪造兼容。"""
 
     exit_code = main(["eval", "--suite", "v0.3"])
 
     captured = capsys.readouterr()
     report = json.loads(captured.out)
-    assert exit_code == 0
+    assert exit_code == 1
     assert report["total_scenarios"] == 20
-    assert report["passed_scenarios"] == 20
-    assert report["guest_llm_calls"] == 0
-    assert report["cross_user_leaks"] == 0
+    assert report["passed"] is False
 
 
 def test_cli_runs_the_v0_4_refund_eval_suite(capsys) -> None:
@@ -587,11 +688,67 @@ def test_cli_serve_uses_single_worker_and_explicit_paths(
     }
 
 
+def test_deployment_serve_uses_unified_json_logging(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    """验证部署启动关闭 Uvicorn 默认日志并使用受控停机窗口。"""
+
+    import uvicorn
+
+    import commerce_resolve.operations.preflight as preflight_module
+    import commerce_resolve.structured_logging as logging_module
+    import commerce_resolve.web as web_module
+
+    run = Mock()
+    app = Mock()
+    monkeypatch.setattr(uvicorn, "run", run)
+    monkeypatch.setattr(web_module, "create_app", Mock(return_value=app))
+    monkeypatch.setattr(
+        preflight_module,
+        "resolve_release_manifest",
+        Mock(return_value=Mock(app_version="1.0.0")),
+    )
+    monkeypatch.setattr(
+        preflight_module,
+        "run_preflight",
+        Mock(return_value=Mock(passed=True)),
+    )
+    configure = Mock()
+    monkeypatch.setattr(logging_module, "configure_json_logging", configure)
+    monkeypatch.setenv("APP_ENV", "deployment")
+    monkeypatch.setenv("DATA_ROOT", str(tmp_path))
+    monkeypatch.setenv("INSTANCE_LOCK_PATH", str(tmp_path / ".instance.lock"))
+    monkeypatch.setenv("LLM_FEATURE_ENABLED", "false")
+    monkeypatch.setenv("SHUTDOWN_GRACE_SECONDS", "17")
+
+    exit_code = main(
+        ["serve", "--host", "0.0.0.0", "--port", "8010"],
+        business_db_path=tmp_path / "business.sqlite",
+        checkpoint_path=tmp_path / "checkpoints.sqlite",
+        policy_source_path=Path("data/policies"),
+        policy_index_path=tmp_path / "policy.sqlite",
+        memory_db_path=tmp_path / "memory.sqlite",
+    )
+
+    assert exit_code == 0
+    configure.assert_called_once_with("INFO")
+    run.assert_called_once_with(
+        app,
+        host="0.0.0.0",
+        port=8010,
+        workers=1,
+        timeout_graceful_shutdown=17,
+        access_log=False,
+        log_config=None,
+    )
+
+
 def test_cli_exports_openapi_for_frontend_type_generation(
     capsys,
     tmp_path,
 ) -> None:
-    """验证生成契约包含 v0.3 Session、Chat 与订单 API。"""
+    """验证生成契约包含 v2.0 Session、Chat 与只读售后订单 API。"""
 
     database = tmp_path / "business.sqlite"
     output = tmp_path / "openapi.json"
@@ -610,4 +767,5 @@ def test_cli_exports_openapi_for_frontend_type_generation(
     assert exit_code == 0
     assert "/api/session" in document["paths"]
     assert "/api/chat/messages" in document["paths"]
-    assert "/api/orders" in document["paths"]
+    assert "/api/support/orders" in document["paths"]
+    assert "/api/orders" not in document["paths"]

@@ -509,8 +509,9 @@ class SqliteConversationRepository:
         payload: dict[str, Any],
         pending_action: str | None,
         checkpoint_id: str | None = None,
+        payload_version: int = 1,
     ) -> tuple[AgentRun, ConversationMessage]:
-        """原子写入助手公开投影，并把 Run 置为完成或等待动作。"""
+        """按显式 Payload 版本写入助手投影并完成或暂停 Run。"""
 
         now = utc_now()
         with self._sessions.begin() as session:
@@ -533,6 +534,7 @@ class SqliteConversationRepository:
                     content=assistant_message,
                     status="completed",
                     payload=payload,
+                    payload_version=payload_version,
                     now=now,
                 )
                 session.add(existing)
@@ -596,6 +598,7 @@ class SqliteConversationRepository:
                     content=assistant_message,
                     status="failed",
                     payload={"error_code": error_code, "retryable": True},
+                    payload_version=2,
                     now=now,
                 )
                 session.add(message_row)
@@ -814,6 +817,7 @@ class SqliteConversationRepository:
         status: MessageStatus,
         payload: dict[str, Any],
         now: datetime,
+        payload_version: int = 1,
     ) -> ConversationMessageRow:
         """使用会话内单调序号追加公开消息并同步列表摘要。"""
 
@@ -826,7 +830,7 @@ class SqliteConversationRepository:
             kind=kind,
             content=content,
             status=status,
-            payload_version=1,
+            payload_version=payload_version,
             payload_json=_json(payload),
             created_at=now,
             updated_at=now,
@@ -875,6 +879,7 @@ class SqliteConversationRepository:
 
         return ConversationSummary(
             thread_id=row.thread_id,
+            related_order_id=row.related_order_id,
             title=row.title,
             lifecycle_status=cast(ConversationLifecycle, row.lifecycle_status),
             history_state=cast(Any, row.history_state),
