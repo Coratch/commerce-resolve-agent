@@ -1,0 +1,17 @@
+{
+  "schema_version": "v0.8-upgrade-fixture-v1",
+  "username": "upgrade.fixture",
+  "order_ids": [
+    "ORD-UPGRADE-PENDING",
+    "ORD-UPGRADE-COMPLETED"
+  ],
+  "expected_minimum_counts": {
+    "users": 1,
+    "orders": 2,
+    "refunds": 1,
+    "l2_cases": 1,
+    "checkpoints": 1,
+    "preferences": 1
+  },
+  "data_classification": "synthetic-only"
+}

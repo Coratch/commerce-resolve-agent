@@ -1,0 +1,145 @@
+#!/bin/sh
+set -eu
+
+ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+cd "$ROOT"
+
+require_docker() {
+  command -v docker >/dev/null 2>&1 || {
+    echo "error: Docker Engine 与 Compose v2 未安装" >&2
+    exit 2
+  }
+  docker compose version >/dev/null 2>&1 || {
+    echo "error: Docker Compose v2 不可用" >&2
+    exit 2
+  }
+}
+
+ensure_environment() {
+  if [ ! -f .env.deploy ]; then
+    cp .env.deploy.example .env.deploy
+    echo "已创建 .env.deploy；默认禁用 LLM。"
+  fi
+  mkdir -p var
+  if [ ! -w var ]; then
+    echo "error: var 不可写；请把目录所有者设置为容器 UID 10001" >&2
+    exit 3
+  fi
+  if stat -c %u var >/dev/null 2>&1 && [ "$(stat -c %u var)" != "10001" ]; then
+    echo "error: Ubuntu 参考环境要求执行 sudo chown -R 10001:10001 var" >&2
+    exit 3
+  fi
+}
+
+ensure_clean_release() {
+  if [ -n "$(git status --porcelain)" ]; then
+    echo "error: 正式镜像只能从无未提交修改的 Git 工作树构建" >&2
+    exit 3
+  fi
+}
+
+release_environment() {
+  APP_VERSION=$(sed -n 's/^version = "\([^"]*\)"/\1/p' pyproject.toml | head -1)
+  GIT_COMMIT=$(git rev-parse HEAD)
+  BUILD_TIMESTAMP=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
+  BASELINE=data/eval/baselines/offline-v1.0.json
+  if [ ! -f "$BASELINE" ]; then
+    echo "error: 缺少 Accepted v1.0 Baseline" >&2
+    exit 3
+  fi
+  OFFLINE_BASELINE_ID=$(sed -n \
+    's/^[[:space:]]*"baseline_id":[[:space:]]*"\([^"]*\)",[[:space:]]*$/\1/p' \
+    "$BASELINE" | head -1)
+  if [ -z "$APP_VERSION" ] || [ -z "$GIT_COMMIT" ] || [ -z "$OFFLINE_BASELINE_ID" ]; then
+    echo "error: 无法读取版本、提交或 Accepted Baseline" >&2
+    exit 3
+  fi
+  export APP_VERSION GIT_COMMIT BUILD_TIMESTAMP OFFLINE_BASELINE_ID
+}
+
+compose() {
+  docker compose --env-file .env.deploy "$@"
+}
+
+run_stopped_operation() {
+  was_running=false
+  if compose ps --status running --quiet app | grep -q .; then
+    was_running=true
+    compose stop app
+  fi
+  if compose run --rm --no-deps app "$@"; then
+    if [ "$was_running" = true ]; then
+      compose up -d --wait app
+    fi
+  else
+    code=$?
+    echo "操作失败，服务保持停止。" >&2
+    return "$code"
+  fi
+}
+
+validate_backup_id() {
+  case "$1" in
+    backup-[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]T[0-9][0-9][0-9][0-9][0-9][0-9]Z-[a-f0-9][a-f0-9][a-f0-9][a-f0-9][a-f0-9][a-f0-9][a-f0-9][a-f0-9]) ;;
+    *) echo "error: backup_id 格式非法" >&2; exit 2 ;;
+  esac
+}
+
+require_docker
+ensure_environment
+release_environment
+
+command=${1:-}
+case "$command" in
+  build)
+    ensure_clean_release
+    compose build --pull app
+    ;;
+  init)
+    compose run --rm --no-deps app ops init
+    ;;
+  up)
+    compose config --quiet
+    compose run --rm --no-deps app ops init
+    compose up -d --wait app
+    ;;
+  down)
+    compose stop app
+    ;;
+  restart)
+    compose up -d --force-recreate --wait app
+    ;;
+  status)
+    if compose ps --status running --quiet app | grep -q .; then
+      compose exec -T app ops status --format json
+    else
+      compose run --rm --no-deps app ops status --format json
+    fi
+    ;;
+  logs)
+    compose logs --tail 200 app
+    ;;
+  backup)
+    run_stopped_operation ops backup create
+    ;;
+  backup-verify)
+    backup_id=${2:-}
+    validate_backup_id "$backup_id"
+    compose run --rm --no-deps app ops backup verify \
+      --backup "/var/lib/commerce-resolve/backups/$backup_id"
+    ;;
+  restore)
+    backup_id=${2:-}
+    validate_backup_id "$backup_id"
+    shift 2
+    run_stopped_operation ops restore \
+      --backup "/var/lib/commerce-resolve/backups/$backup_id" "$@"
+    ;;
+  upgrade)
+    run_stopped_operation ops upgrade --from v0.8
+    ;;
+  *)
+    echo "usage: $0 {build|init|up|down|restart|status|logs|backup|backup-verify ID|restore ID|upgrade}" >&2
+    exit 2
+    ;;
+esac

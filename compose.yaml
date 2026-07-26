@@ -1,0 +1,48 @@
+name: commerce-resolve
+
+services:
+  app:
+    image: commerce-resolve:${APP_VERSION:?APP_VERSION is required}
+    build:
+      context: .
+      args:
+        APP_VERSION: ${APP_VERSION:?APP_VERSION is required}
+        GIT_COMMIT: ${GIT_COMMIT:?GIT_COMMIT is required}
+        BUILD_TIMESTAMP: ${BUILD_TIMESTAMP:?BUILD_TIMESTAMP is required}
+        OFFLINE_BASELINE_ID: ${OFFLINE_BASELINE_ID:?OFFLINE_BASELINE_ID is required}
+    env_file:
+      - .env.deploy
+    ports:
+      - "127.0.0.1:${HOST_PORT:-8000}:8000"
+    volumes:
+      - type: bind
+        source: ./var
+        target: /var/lib/commerce-resolve
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+    user: "10001:10001"
+    init: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    stop_grace_period: 40s
+    restart: unless-stopped
+    logging:
+      driver: local
+      options:
+        max-size: "10m"
+        max-file: "3"
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - >-
+          import urllib.request;
+          urllib.request.urlopen('http://127.0.0.1:8000/api/health/ready', timeout=2)
+      interval: 10s
+      timeout: 3s
+      retries: 12
+      start_period: 10s

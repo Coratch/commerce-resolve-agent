@@ -5,13 +5,17 @@ __pycache__/
 .mypy_cache/
 .venv/
 .env
+.env.*
+!.env.deploy.example
 .idea/
 .DS_Store
 *.sqlite
 *.sqlite-*
 /var/
+/data/eval/runs/
 /frontend/node_modules/
 /frontend/dist/
 /frontend/test-results/
 /frontend/playwright-report/
 /frontend/*.tsbuildinfo
+/frontend/var/
