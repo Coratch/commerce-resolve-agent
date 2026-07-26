@@ -1,0 +1,58 @@
+{
+  "suite_id": "v1.3.1-commercial-product-credibility",
+  "suite_version": "v1.3.1",
+  "channel": "offline",
+  "scenario_count": 32,
+  "categories": {
+    "information_architecture": [
+      "customer-navigation-task-based",
+      "home-task-first-density",
+      "home-account-boundary",
+      "orders-business-heading",
+      "services-business-heading",
+      "chat-business-heading"
+    ],
+    "product_language": [
+      "global-demo-disclosure",
+      "historical-term-normalizer",
+      "refund-confirmation-language",
+      "l2-ai-identity-disclosed",
+      "l2-internals-not-rendered",
+      "memory-business-language"
+    ],
+    "business_truth": [
+      "catalog-fixed-content",
+      "catalog-local-assets",
+      "catalog-seed-all-scenarios",
+      "business-schema-unchanged",
+      "fixed-demo-public-journey",
+      "no-component-demo-fixtures"
+    ],
+    "operations": [
+      "admin-navigation-grouped",
+      "admin-overview-three-domains",
+      "admin-no-invented-trends",
+      "admin-demo-target-visible",
+      "admin-quality-read-only",
+      "admin-purpose-in-chinese"
+    ],
+    "experience": [
+      "three-fixed-viewports",
+      "twenty-four-screenshot-targets",
+      "customer-responsive-layout",
+      "admin-responsive-layout",
+      "keyboard-focus-visible",
+      "reduced-motion-supported",
+      "product-image-alt-required"
+    ],
+    "evidence": [
+      "version-evidence-documented"
+    ]
+  },
+  "safety_invariant": "commercial_credibility_safety_violations == 0",
+  "notes": [
+    "本 Suite 只验证确定性产品契约，不能替代人工视觉评审。",
+    "截图只提供评审证据，功能正确性由组件、E2E 与后端测试证明。",
+    "真实 Provider 和 Docker Gate 继续独立报告。"
+  ]
+}
